@@ -1,82 +1,81 @@
 "use client"
 
-import { useState } from "react"
-import { Search, Clock, Users, ChefHat, Beef, Flame } from "lucide-react"
+import { useState, useEffect } from "react"
+import { motion } from "framer-motion"
+import { Search, Clock, ChefHat, Beef, TrendingUp } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { getRecipes } from "@/lib/api"
+import type { Recipe } from "@/constants/mockData"
 
-const categories = ["전체", "소고기", "돼지고기", "닭고기", "양고기"]
+const categories = ["전체", "소고기", "돼지고기", "닭고기"]
 
-const recipes = [
-  {
-    id: 1,
-    name: "한우 등심 스테이크",
-    category: "소고기",
-    time: "30분",
-    servings: 2,
-    difficulty: "중급",
-    calories: 450,
-  },
-  {
-    id: 2,
-    name: "삼겹살 김치찌개",
-    category: "돼지고기",
-    time: "40분",
-    servings: 4,
-    difficulty: "초급",
-    calories: 380,
-  },
-  {
-    id: 3,
-    name: "닭가슴살 샐러드",
-    category: "닭고기",
-    time: "15분",
-    servings: 1,
-    difficulty: "초급",
-    calories: 250,
-  },
-  {
-    id: 4,
-    name: "양갈비 로즈마리 구이",
-    category: "양고기",
-    time: "45분",
-    servings: 2,
-    difficulty: "고급",
-    calories: 520,
-  },
-  {
-    id: 5,
-    name: "불고기 덮밥",
-    category: "소고기",
-    time: "25분",
-    servings: 2,
-    difficulty: "초급",
-    calories: 550,
-  },
-  {
-    id: 6,
-    name: "돼지갈비찜",
-    category: "돼지고기",
-    time: "90분",
-    servings: 4,
-    difficulty: "중급",
-    calories: 420,
-  },
-]
+const getDifficultyColor = (difficulty: string) => {
+  switch (difficulty) {
+    case "초급":
+      return "bg-green-100 text-green-700 border-green-300"
+    case "중급":
+      return "bg-yellow-100 text-yellow-700 border-yellow-300"
+    case "고급":
+      return "bg-red-100 text-red-700 border-red-300"
+    default:
+      return "bg-gray-100 text-gray-700 border-gray-300"
+  }
+}
 
 export function RecipeView() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("전체")
+  const [recipes, setRecipes] = useState<Recipe[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadRecipes()
+  }, [activeCategory])
+
+  const loadRecipes = async () => {
+    setLoading(true)
+    try {
+      const meatType = activeCategory === "전체" ? undefined : activeCategory
+      const data = await getRecipes(meatType)
+      setRecipes(data)
+    } catch (error) {
+      console.error("Failed to load recipes:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredRecipes = recipes.filter((recipe) => {
-    const matchesSearch = recipe.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = activeCategory === "전체" || recipe.category === activeCategory
-    return matchesSearch && matchesCategory
+    return recipe.name.toLowerCase().includes(searchQuery.toLowerCase())
   })
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">레시피를 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Header Card */}
+      <Card className="bg-primary/5 border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-primary">
+            <ChefHat className="w-5 h-5" />
+            레시피 탐색
+          </CardTitle>
+          <CardDescription>부위별 다양한 요리법을 찾아보세요</CardDescription>
+        </CardHeader>
+      </Card>
+
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -84,14 +83,14 @@ export function RecipeView() {
           placeholder="레시피 검색..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 bg-card border-border rounded-xl"
+          className="pl-10 bg-card border-border rounded-xl h-12"
         />
       </div>
 
       {/* Category Filter */}
       <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
         {categories.map((category) => (
-          <button
+          <motion.button
             key={category}
             onClick={() => setActiveCategory(category)}
             className={cn(
@@ -100,56 +99,66 @@ export function RecipeView() {
                 ? "bg-primary text-primary-foreground"
                 : "bg-secondary text-foreground hover:bg-secondary/80"
             )}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
             {category}
-          </button>
+          </motion.button>
         ))}
       </div>
 
       {/* Recipe Grid */}
-      <div className="grid gap-3">
-        {filteredRecipes.map((recipe) => (
-          <div
+      <div className="grid gap-4">
+        {filteredRecipes.map((recipe, index) => (
+          <motion.div
             key={recipe.id}
-            className="bg-card rounded-2xl p-4 border border-border shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
           >
-            <div className="flex gap-4">
-              <div className="w-20 h-20 rounded-xl bg-secondary flex items-center justify-center shrink-0">
-                <Beef className="w-8 h-8 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-foreground truncate">{recipe.name}</h3>
-                  <Badge variant="outline" className="text-[10px] shrink-0">
-                    {recipe.difficulty}
-                  </Badge>
+            <Card className="bg-card border-primary/20 shadow-md hover:shadow-lg transition-all cursor-pointer">
+              <CardContent className="p-4">
+                <div className="flex gap-4">
+                  <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0">
+                    <Beef className="w-8 h-8 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <h3 className="font-semibold text-foreground text-lg">{recipe.name}</h3>
+                      <Badge className={cn("text-[10px] shrink-0", getDifficultyColor(recipe.difficulty))}>
+                        {recipe.difficulty}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3">{recipe.meatType}</p>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {recipe.cookingTime}분
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3" />
+                        인기
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">{recipe.category}</p>
-                <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {recipe.time}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    {recipe.servings}인분
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Flame className="w-3 h-3" />
-                    {recipe.calories}kcal
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         ))}
       </div>
 
       {filteredRecipes.length === 0 && (
-        <div className="text-center py-12">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center py-12"
+        >
           <ChefHat className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground">검색 결과가 없습니다</p>
-        </div>
+        </motion.div>
       )}
     </div>
   )

@@ -1,6 +1,7 @@
 "use client"
 
-import { Home, Camera, BookOpen, User } from "lucide-react"
+import { motion } from "framer-motion"
+import { LayoutDashboard, ScanLine, BookOpen, Refrigerator } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface MobileNavProps {
@@ -9,31 +10,39 @@ interface MobileNavProps {
 }
 
 const menuItems = [
-  { id: "home", label: "홈", icon: Home },
-  { id: "camera", label: "AI 카메라", icon: Camera },
+  { id: "dashboard", label: "홈", icon: LayoutDashboard },
+  { id: "analysis", label: "분석", icon: ScanLine },
+  { id: "fridge", label: "냉장고", icon: Refrigerator },
   { id: "recipe", label: "레시피", icon: BookOpen },
-  { id: "mypage", label: "마이", icon: User },
 ]
 
 export function MobileNav({ activeMenu, onMenuChange }: MobileNavProps) {
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-area-inset-bottom">
       <ul className="flex justify-around items-center h-16 px-2">
         {menuItems.map((item) => {
           const Icon = item.icon
           const isActive = activeMenu === item.id
           return (
             <li key={item.id} className="flex-1">
-              <button
+              <motion.button
                 onClick={() => onMenuChange(item.id)}
                 className={cn(
-                  "w-full flex flex-col items-center gap-1 py-2 transition-colors",
+                  "w-full flex flex-col items-center gap-1 py-2 transition-colors relative",
                   isActive ? "text-primary" : "text-muted-foreground"
                 )}
+                whileTap={{ scale: 0.9 }}
               >
-                <Icon className={cn("w-5 h-5", isActive && "stroke-[2.5px]")} />
-                <span className="text-[10px] font-medium">{item.label}</span>
-              </button>
+                {isActive && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className="absolute inset-0 bg-primary/10 rounded-lg"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <Icon className={cn("w-5 h-5 relative z-10", isActive && "stroke-[2.5px]")} />
+                <span className="text-[10px] font-medium relative z-10">{item.label}</span>
+              </motion.button>
             </li>
           )
         })}

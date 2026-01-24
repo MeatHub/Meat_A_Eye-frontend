@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Home, Camera, BookOpen, User, Beef, TrendingUp, Lightbulb } from "lucide-react"
+import { motion } from "framer-motion"
+import { LayoutDashboard, ScanLine, BookOpen, Refrigerator, Beef, TrendingUp, Lightbulb } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -9,13 +10,14 @@ import { cn } from "@/lib/utils"
 interface AppSidebarProps {
   activeMenu: string
   onMenuChange: (menu: string) => void
+  guestNickname?: string
 }
 
 const menuItems = [
-  { id: "home", label: "홈", icon: Home },
-  { id: "camera", label: "AI 카메라", icon: Camera },
+  { id: "dashboard", label: "대시보드", icon: LayoutDashboard },
+  { id: "analysis", label: "AI 분석", icon: ScanLine },
+  { id: "fridge", label: "냉장고 관리", icon: Refrigerator },
   { id: "recipe", label: "레시피 탐색", icon: BookOpen },
-  { id: "mypage", label: "마이페이지", icon: User },
 ]
 
 const meatFacts = [
@@ -31,7 +33,7 @@ const popularCuts = [
   { name: "닭가슴살", trend: "+15%" },
 ]
 
-export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
+export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스트" }: AppSidebarProps) {
   const [factIndex] = useState(() => Math.floor(Math.random() * meatFacts.length))
 
   return (
@@ -55,11 +57,11 @@ export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
           <div className="flex items-center gap-3">
             <Avatar className="w-12 h-12 border-2 border-primary/20">
               <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                육박
+                {guestNickname.slice(0, 2)}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              <p className="font-medium text-foreground">게스트 육류박사</p>
+              <p className="font-medium text-foreground">{guestNickname}</p>
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-0">
                   Lv.3 미식가
@@ -84,7 +86,7 @@ export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
             const isActive = activeMenu === item.id
             return (
               <li key={item.id}>
-                <button
+                <motion.button
                   onClick={() => onMenuChange(item.id)}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
@@ -92,10 +94,12 @@ export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
                       ? "bg-primary text-primary-foreground shadow-md"
                       : "text-foreground hover:bg-secondary"
                   )}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   <Icon className="w-5 h-5" />
                   {item.label}
-                </button>
+                </motion.button>
               </li>
             )
           })}
@@ -105,7 +109,12 @@ export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
       {/* Bottom Widget */}
       <div className="p-4 space-y-3">
         {/* Today's Meat Fact */}
-        <div className="bg-secondary rounded-xl p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-secondary rounded-xl p-4"
+        >
           <div className="flex items-center gap-2 mb-2">
             <Lightbulb className="w-4 h-4 text-primary" />
             <span className="text-xs font-semibold text-primary">오늘의 고기 상식</span>
@@ -113,10 +122,15 @@ export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
           <p className="text-xs text-muted-foreground leading-relaxed">
             {meatFacts[factIndex]}
           </p>
-        </div>
+        </motion.div>
 
         {/* Popular Cuts */}
-        <div className="bg-secondary rounded-xl p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-secondary rounded-xl p-4"
+        >
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp className="w-4 h-4 text-primary" />
             <span className="text-xs font-semibold text-primary">실시간 인기 부위</span>
@@ -134,7 +148,7 @@ export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
               </li>
             ))}
           </ul>
-        </div>
+        </motion.div>
       </div>
     </aside>
   )

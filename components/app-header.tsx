@@ -1,5 +1,6 @@
 "use client"
 
+import { motion } from "framer-motion"
 import { Beef, Wand2, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
@@ -10,16 +11,17 @@ interface AppHeaderProps {
   onRandomRecipe: () => void
   activeMenu: string
   onMenuChange: (menu: string) => void
+  guestNickname?: string
 }
 
 const menuItems = [
-  { id: "home", label: "홈" },
-  { id: "camera", label: "AI 카메라" },
+  { id: "dashboard", label: "대시보드" },
+  { id: "analysis", label: "AI 분석" },
+  { id: "fridge", label: "냉장고 관리" },
   { id: "recipe", label: "레시피 탐색" },
-  { id: "mypage", label: "마이페이지" },
 ]
 
-export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange }: AppHeaderProps) {
+export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange, guestNickname = "게스트" }: AppHeaderProps) {
   return (
     <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-sm border-b border-border">
       <div className="flex items-center justify-between h-14 px-4">
@@ -53,11 +55,11 @@ export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange }: AppHeade
                   <div className="flex items-center gap-3">
                     <Avatar className="w-12 h-12 border-2 border-primary/20">
                       <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                        육박
+                        {guestNickname.slice(0, 2)}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium text-foreground">게스트 육류박사</p>
+                      <p className="font-medium text-foreground">{guestNickname}</p>
                       <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-0 mt-1">
                         Lv.3 미식가
                       </Badge>
@@ -100,20 +102,22 @@ export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange }: AppHeade
         {/* Desktop Title */}
         <div className="hidden lg:block">
           <h2 className="text-lg font-semibold text-foreground">
-            {menuItems.find(m => m.id === activeMenu)?.label || "홈"}
+            {menuItems.find(m => m.id === activeMenu)?.label || "대시보드"}
           </h2>
         </div>
 
         {/* Random Recipe Button */}
-        <Button
-          onClick={onRandomRecipe}
-          variant="default"
-          size="sm"
-          className="gap-2 bg-primary hover:bg-primary/90"
-        >
-          <Wand2 className="w-4 h-4" />
-          <span className="hidden sm:inline">랜덤 레시피</span>
-        </Button>
+        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <Button
+            onClick={onRandomRecipe}
+            variant="default"
+            size="sm"
+            className="gap-2 bg-primary hover:bg-primary/90"
+          >
+            <Wand2 className="w-4 h-4" />
+            <span className="hidden sm:inline">마법 레시피</span>
+          </Button>
+        </motion.div>
       </div>
     </header>
   )
