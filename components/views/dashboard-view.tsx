@@ -5,20 +5,18 @@ import { motion } from "framer-motion"
 import { TrendingUp, Beef, BookOpen, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
-import { getAnalysisHistory, getFridgeItems, getPriceData, getRandomMeatFact } from "@/lib/api"
-import { getDDay, getDDayColor, formatDate } from "@/constants/mockData"
-import type { MeatAnalysisResult, FridgeItem, PriceData } from "@/constants/mockData"
+import { Button } from "@/components/ui/button"
+import { LineChart, Line, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
+import { getFridgeItems } from "@/lib/api"
+import { toast } from "@/components/ui/use-toast"
+import type { FridgeItemResponse } from "@/types/api"
 
 interface DashboardViewProps {
   onNavigate: (menu: string) => void
 }
 
 export function DashboardView({ onNavigate }: DashboardViewProps) {
-  const [recentAnalysis, setRecentAnalysis] = useState<MeatAnalysisResult[]>([])
-  const [fridgeItems, setFridgeItems] = useState<FridgeItem[]>([])
-  const [priceData, setPriceData] = useState<PriceData[]>([])
-  const [meatFact, setMeatFact] = useState<{ title: string; content: string } | null>(null)
+  const [fridgeItems, setFridgeItems] = useState<FridgeItemResponse[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -27,27 +25,52 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
 
   const loadDashboardData = async () => {
     try {
-      const [analysis, fridge, prices, fact] = await Promise.all([
-        getAnalysisHistory(),
+      const [fridgeResponse] = await Promise.all([
         getFridgeItems(),
-        getPriceData(),
-        getRandomMeatFact(),
+        // getAnalysisHistory(), // 실제 API 구현 시 활성화
+        // getPriceData(), // 실제 API 구현 시 활성화
+        // getRandomMeatFact(), // 실제 API 구현 시 활성화
       ])
-      setRecentAnalysis(analysis)
-      setFridgeItems(fridge)
-      setPriceData(prices)
-      setMeatFact(fact)
-    } catch (error) {
+      setFridgeItems(fridgeResponse.items.filter(item => item.status === "stored"))
+      // setRecentAnalysis(analysis) // 실제 API 구현 시 활성화
+      // setPriceData(prices) // 실제 API 구현 시 활성화
+      // setMeatFact(fact) // 실제 API 구현 시 활성화
+    } catch (error: any) {
       console.error("Failed to load dashboard data:", error)
+      toast({
+        title: "로딩 실패",
+        description: error.message || "데이터를 불러오는데 실패했습니다.",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  // Sort fridge items by expiry date
-  const sortedFridgeItems = [...fridgeItems].sort((a, b) => {
-    return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()
-  })
+  // Sort fridge items by expiry date (already sorted by API, but ensure)
+  const sortedFridgeItems = [...fridgeItems].sort((a, b) => a.dDay - b.dDay)
+
+  // Prepare chart data for meat parts distribution
+  const meatPartsData = fridgeItems.reduce((acc, item) => {
+    const part = item.name
+    acc[part] = (acc[part] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
+  const pieData = Object.entries(meatPartsData).map(([name, value]) => ({
+    name,
+    value,
+  }))
+
+  const COLORS = ["#800000", "#A52A2A", "#CD5C5C", "#DC143C", "#B22222", "#8B0000"]
+
+  // Prepare expiry date data
+  const expiryData = [
+    { range: "D-0~1", count: fridgeItems.filter(item => item.dDay <= 1).length },
+    { range: "D-2~3", count: fridgeItems.filter(item => item.dDay >= 2 && item.dDay <= 3).length },
+    { range: "D-4~7", count: fridgeItems.filter(item => item.dDay >= 4 && item.dDay <= 7).length },
+    { range: "D-8+", count: fridgeItems.filter(item => item.dDay >= 8).length },
+  ]
 
   if (loading) {
     return (
@@ -80,55 +103,23 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               <CardDescription>AI가 분석한 고기 부위 정보</CardDescription>
             </CardHeader>
             <CardContent>
-              {recentAnalysis.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Beef className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>아직 분석한 고기가 없습니다</p>
-                  <button
+              <div className="text-center py-12 text-muted-foreground">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Beef className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <h3 className="text-lg font-semibold mb-2 text-foreground">아직 분석한 고기가 없습니다</h3>
+                  <p className="text-sm mb-4">카메라로 고기를 찍어보세요!</p>
+                  <Button
                     onClick={() => onNavigate("analysis")}
-                    className="text-primary hover:underline mt-2"
+                    className="bg-primary hover:bg-primary/90"
                   >
                     지금 분석하기 →
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {recentAnalysis.slice(0, 3).map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-4 rounded-lg bg-background border border-border hover:border-primary/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-                          <Beef className="w-8 h-8 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-foreground">{item.partName}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {item.origin} · {formatDate(item.timestamp)}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className="text-xs">
-                              신뢰도: {(item.confidence * 100).toFixed(0)}%
-                            </Badge>
-                            {item.grade && (
-                              <Badge className="text-xs bg-primary/10 text-primary border-primary/20">
-                                {item.grade}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => onNavigate("analysis")}
-                    className="w-full py-2 text-sm text-primary hover:text-primary/80 font-medium transition-colors"
-                  >
-                    전체 기록 보기 →
-                  </button>
-                </div>
-              )}
+                  </Button>
+                </motion.div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -150,20 +141,28 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
             </CardHeader>
             <CardContent>
               {sortedFridgeItems.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>보관 중인 고기가 없습니다</p>
-                  <button
-                    onClick={() => onNavigate("fridge")}
-                    className="text-primary hover:underline mt-2"
+                <div className="text-center py-12 text-muted-foreground">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3 }}
                   >
-                    추가하기 →
-                  </button>
+                    <AlertCircle className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-semibold mb-2 text-foreground">보관 중인 고기가 없습니다</h3>
+                    <p className="text-sm mb-4">고기를 분석하고 냉장고에 추가해보세요!</p>
+                    <Button
+                      onClick={() => onNavigate("analysis")}
+                      className="bg-primary hover:bg-primary/90"
+                    >
+                      고기 분석하기 →
+                    </Button>
+                  </motion.div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {sortedFridgeItems.slice(0, 5).map((item) => {
-                    const daysLeft = getDDay(item.expiryDate)
-                    const color = getDDayColor(daysLeft)
+                    const daysLeft = item.dDay
+                    const color = daysLeft <= 1 ? "red" : daysLeft <= 3 ? "yellow" : "green"
                     const colorClasses = {
                       red: "border-red-500 bg-red-50",
                       yellow: "border-yellow-500 bg-yellow-50",
@@ -191,7 +190,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {item.weight}g · {item.meatType}
+                          유통기한: {new Date(item.expiryDate).toLocaleDateString("ko-KR")}
                         </p>
                       </div>
                     )
@@ -210,7 +209,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
           </Card>
         </motion.div>
 
-        {/* Card C - Medium: Price Trend Chart */}
+        {/* Card C - Medium: Price Trend Chart (실제 API 연동 시 활성화) */}
+        {/* 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -223,7 +223,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                 <TrendingUp className="w-5 h-5" />
                 고기 시세 추이
               </CardTitle>
-              <CardDescription>최근 6주간 가격 변동</CardDescription>
+              <CardDescription>최근 가격 변동</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
@@ -277,12 +277,94 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
             </CardContent>
           </Card>
         </motion.div>
+        */}
 
-        {/* Card D - Small: Today's Meat Fact */}
+        {/* Card D - Small: Meat Parts Distribution Chart */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.3 }}
+          className="lg:col-span-1"
+        >
+          <Card className="bg-card border-primary/20 shadow-lg hover:shadow-xl transition-shadow h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-primary">
+                <Beef className="w-5 h-5" />
+                부위별 분포
+              </CardTitle>
+              <CardDescription>냉장고 고기 부위 비율</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {pieData.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>데이터가 없습니다</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Card E - Medium: Expiry Date Distribution */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.4 }}
+          className="lg:col-span-1"
+        >
+          <Card className="bg-card border-primary/20 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-primary">
+                <AlertCircle className="w-5 h-5" />
+                유통기한 임박도
+              </CardTitle>
+              <CardDescription>고기 유통기한 분포</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={expiryData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E8E4DD" />
+                  <XAxis dataKey="range" stroke="#6B6B6B" style={{ fontSize: "12px" }} />
+                  <YAxis stroke="#6B6B6B" style={{ fontSize: "12px" }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#FAF9F6",
+                      border: "1px solid #E8E4DD",
+                      borderRadius: "8px",
+                    }}
+                  />
+                  <Bar dataKey="count" fill="#800000" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Card F - Small: Today's Meat Fact (실제 API 연동 시 활성화) */}
+        {/* 
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.5 }}
           className="lg:col-span-1"
         >
           <Card className="bg-gradient-to-br from-primary to-primary/80 text-white shadow-lg hover:shadow-xl transition-shadow h-full">
@@ -304,6 +386,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
             </CardContent>
           </Card>
         </motion.div>
+        */}
       </div>
     </div>
   )

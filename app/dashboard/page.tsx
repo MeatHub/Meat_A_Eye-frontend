@@ -127,6 +127,13 @@ export default function MeatAEyeDashboard() {
     }
   }
 
+  // Redirect to login if not authenticated (optional - can be removed if guest mode is allowed)
+  // const { isAuthenticated, isLoading } = useAuth()
+  // if (!isLoading && !isAuthenticated) {
+  //   router.push("/login")
+  //   return null
+  // }
+
   if (!mounted) {
     return null // Prevent hydration issues
   }

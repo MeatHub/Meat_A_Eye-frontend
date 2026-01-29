@@ -8,9 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { analyzeImage } from "@/lib/api"
+import { analyzeImage, addFridgeItem, getFridgeItems } from "@/lib/api"
+import { getMeatInfoByPartName } from "@/lib/api-meat"
 import { preprocessImage, captureFromVideo, validateImageFile, createImagePreview } from "@/lib/imagePreprocessing"
+import { toast } from "@/components/ui/use-toast"
 import type { MeatAnalysisResult } from "@/constants/mockData"
+import type { AIAnalyzeResponse, MeatInfoByPartNameResponse } from "@/types/api"
 
 interface AnalysisViewProps {
   onSaveToFridge: () => void
@@ -22,7 +25,11 @@ export function AnalysisView({ onSaveToFridge }: AnalysisViewProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [result, setResult] = useState<MeatAnalysisResult | null>(null)
+  const [analysisResponse, setAnalysisResponse] = useState<AIAnalyzeResponse | null>(null)
+  const [meatInfo, setMeatInfo] = useState<MeatInfoByPartNameResponse | null>(null)
+  const [loadingMeatInfo, setLoadingMeatInfo] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   // Camera refs
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -131,29 +138,118 @@ export function AnalysisView({ onSaveToFridge }: AnalysisViewProps) {
     setError(null)
 
     try {
-      // Preprocess image before sending
+      // Convert dataUrl to File
       const blob = await fetch(selectedImage).then((r) => r.blob())
       const file = new File([blob], "image.jpg", { type: "image/jpeg" })
+      
+      // Preprocess image before sending
       const preprocessed = await preprocessImage(file)
 
       console.log(
         `Image preprocessed: ${preprocessed.originalSize} → ${preprocessed.compressedSize} bytes`
       )
 
-      // Send to AI server
-      const analysisResult = await analyzeImage(preprocessed.dataUrl, mode)
-      setResult(analysisResult)
-    } catch (err) {
+      // Convert preprocessed dataUrl back to File for multipart upload
+      const preprocessedBlob = await fetch(preprocessed.dataUrl).then((r) => r.blob())
+      const preprocessedFile = new File([preprocessedBlob], "image.jpg", { type: "image/jpeg" })
+
+      // Send to backend API with multipart form data
+      const analysisResult = await analyzeImage(preprocessedFile, mode, false) // Don't auto-add to fridge
+      setAnalysisResponse(analysisResult)
+      
+      // Convert to MeatAnalysisResult format for display
+      const displayResult: MeatAnalysisResult = {
+        id: Date.now().toString(),
+        partName: analysisResult.partName || "알 수 없음",
+        confidence: analysisResult.confidence || 0,
+        timestamp: new Date(),
+        origin: analysisResult.raw?.origin,
+        grade: analysisResult.raw?.grade,
+        traceabilityNumber: analysisResult.historyNo || undefined,
+      }
+      
+      setResult(displayResult)
+      
+      // 분석 응답에 영양정보와 가격정보가 포함되어 있으면 사용
+      if (analysisResult.nutrition || analysisResult.price) {
+        setMeatInfo({
+          partName: analysisResult.partName || "",
+          calories: analysisResult.nutrition?.calories || null,
+          protein: analysisResult.nutrition?.protein || null,
+          fat: analysisResult.nutrition?.fat || null,
+          carbohydrate: analysisResult.nutrition?.carbohydrate || null,
+          currentPrice: analysisResult.price?.currentPrice || 0,
+          priceUnit: analysisResult.price?.priceUnit || "100g",
+          priceTrend: analysisResult.price?.priceTrend || "flat",
+          priceDate: analysisResult.price?.priceDate || null,
+          priceSource: analysisResult.price?.priceSource || "fallback",
+          storageGuide: null,
+        })
+      } else if (analysisResult.partName) {
+        // 응답에 없으면 별도로 조회
+        await loadMeatInfo(analysisResult.partName)
+      }
+    } catch (err: any) {
       console.error("Analysis error:", err)
-      setError("분석에 실패했습니다. 다시 시도해주세요.")
+      setError(err.message || "분석에 실패했습니다. 다시 시도해주세요.")
     } finally {
       setAnalyzing(false)
+    }
+  }
+
+  const loadMeatInfo = async (partName: string) => {
+    setLoadingMeatInfo(true)
+    try {
+      const info = await getMeatInfoByPartName(partName)
+      setMeatInfo(info)
+    } catch (error: any) {
+      console.error("Failed to load meat info:", error)
+      // 영양정보 로드 실패는 치명적이지 않으므로 에러 표시하지 않음
+    } finally {
+      setLoadingMeatInfo(false)
+    }
+  }
+
+  const handleSaveToFridge = async () => {
+    if (!analysisResponse || !analysisResponse.partName) {
+      toast({
+        title: "저장 실패",
+        description: "분석 결과가 없습니다.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSaving(true)
+    try {
+      // auto_add_fridge = true로 다시 분석하여 자동 저장
+      const blob = await fetch(selectedImage!).then(r => r.blob())
+      const file = new File([blob], "image.jpg", { type: "image/jpeg" })
+      
+      await analyzeImage(file, mode, true) // auto_add_fridge = true
+      
+      toast({
+        title: "저장 완료! 🎉",
+        description: `${analysisResponse.partName}이(가) 냉장고에 저장되었습니다.`,
+      })
+      
+      onSaveToFridge()
+    } catch (error: any) {
+      console.error("Failed to save to fridge:", error)
+      toast({
+        title: "저장 실패",
+        description: error.message || "냉장고에 저장하는데 실패했습니다.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
     }
   }
 
   const reset = () => {
     setSelectedImage(null)
     setResult(null)
+    setAnalysisResponse(null)
     setError(null)
     setInputMethod(null)
     stopCamera()
@@ -327,8 +423,9 @@ export function AnalysisView({ onSaveToFridge }: AnalysisViewProps) {
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="space-y-3"
+                    className="space-y-4"
                   >
+                    {/* 분석 결과 */}
                     <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
                       <h3 className="text-xl font-bold text-primary mb-2">{result.partName}</h3>
                       <div className="flex flex-wrap gap-2">
@@ -342,11 +439,101 @@ export function AnalysisView({ onSaveToFridge }: AnalysisViewProps) {
                       </div>
                     </div>
 
+                    {/* 영양정보 및 가격정보 */}
+                    {meatInfo ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* 영양정보 */}
+                        <Card className="bg-card border-primary/20">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-semibold">영양정보 (100g당)</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-1 text-sm">
+                            {meatInfo.calories !== null && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">칼로리</span>
+                                <span className="font-medium">{meatInfo.calories}kcal</span>
+                              </div>
+                            )}
+                            {meatInfo.protein !== null && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">단백질</span>
+                                <span className="font-medium">{meatInfo.protein.toFixed(1)}g</span>
+                              </div>
+                            )}
+                            {meatInfo.fat !== null && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">지방</span>
+                                <span className="font-medium">{meatInfo.fat.toFixed(1)}g</span>
+                              </div>
+                            )}
+                            {meatInfo.carbohydrate !== null && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">탄수화물</span>
+                                <span className="font-medium">{meatInfo.carbohydrate.toFixed(1)}g</span>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+
+                        {/* 가격정보 */}
+                        <Card className="bg-card border-primary/20">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-semibold">시세 정보</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-1 text-sm">
+                            {meatInfo.currentPrice > 0 ? (
+                              <>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">현재 가격</span>
+                                  <span className="font-medium">{meatInfo.currentPrice.toLocaleString()}원</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">단위</span>
+                                  <span className="font-medium">{meatInfo.priceUnit}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">추세</span>
+                                  <Badge
+                                    variant={
+                                      meatInfo.priceTrend === "up"
+                                        ? "default"
+                                        : meatInfo.priceTrend === "down"
+                                        ? "secondary"
+                                        : "outline"
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {meatInfo.priceTrend === "up" ? "↑ 상승" : meatInfo.priceTrend === "down" ? "↓ 하락" : "→ 보합"}
+                                  </Badge>
+                                </div>
+                                {meatInfo.priceDate && (
+                                  <div className="text-xs text-muted-foreground mt-2">
+                                    기준일: {meatInfo.priceDate}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-sm text-muted-foreground">가격 정보 없음</div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ) : null}
+
+                    {/* 저장 버튼 */}
                     <Button
-                      onClick={onSaveToFridge}
+                      onClick={handleSaveToFridge}
+                      disabled={saving}
                       className="w-full bg-primary hover:bg-primary/90"
                     >
-                      냉장고에 저장하기
+                      {saving ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          저장 중...
+                        </>
+                      ) : (
+                        "냉장고에 저장하기"
+                      )}
                     </Button>
                   </motion.div>
                 )}

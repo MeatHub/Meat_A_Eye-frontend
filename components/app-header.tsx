@@ -1,11 +1,21 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Beef, Wand2, Menu } from "lucide-react"
+import { Beef, Wand2, Menu, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
 
 interface AppHeaderProps {
   onRandomRecipe: () => void
@@ -22,6 +32,14 @@ const menuItems = [
 ]
 
 export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange, guestNickname = "게스트" }: AppHeaderProps) {
+  const { isAuthenticated, nickname, logout } = useAuth()
+  const router = useRouter()
+  const displayName = isAuthenticated ? nickname || "사용자" : guestNickname
+
+  const handleLogout = () => {
+    logout()
+  }
+
   return (
     <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-sm border-b border-border">
       <div className="flex items-center justify-between h-14 px-4">
@@ -55,13 +73,13 @@ export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange, guestNickn
                   <div className="flex items-center gap-3">
                     <Avatar className="w-12 h-12 border-2 border-primary/20">
                       <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                        {guestNickname.slice(0, 2)}
+                        {displayName.slice(0, 2)}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium text-foreground">{guestNickname}</p>
+                      <p className="font-medium text-foreground">{displayName}</p>
                       <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-0 mt-1">
-                        Lv.3 미식가
+                        {isAuthenticated ? "회원" : "게스트"}
                       </Badge>
                     </div>
                   </div>
@@ -106,18 +124,70 @@ export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange, guestNickn
           </h2>
         </div>
 
-        {/* Random Recipe Button */}
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button
-            onClick={onRandomRecipe}
-            variant="default"
-            size="sm"
-            className="gap-2 bg-primary hover:bg-primary/90"
-          >
-            <Wand2 className="w-4 h-4" />
-            <span className="hidden sm:inline">마법 레시피</span>
-          </Button>
-        </motion.div>
+        {/* Right side buttons */}
+        <div className="flex items-center gap-2">
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              onClick={onRandomRecipe}
+              variant="default"
+              size="sm"
+              className="gap-2 bg-primary hover:bg-primary/90"
+            >
+              <Wand2 className="w-4 h-4" />
+              <span className="hidden sm:inline">마법 레시피</span>
+            </Button>
+          </motion.div>
+
+          {/* User Menu */}
+          {isAuthenticated ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full">
+                  <Avatar className="h-9 w-9">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                      {displayName.slice(0, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium">{displayName}</p>
+                    <p className="text-xs text-muted-foreground">{nickname}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => router.push("/dashboard")}>
+                  <User className="mr-2 h-4 w-4" />
+                  대시보드
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  로그아웃
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/login")}
+              >
+                로그인
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => router.push("/signup")}
+              >
+                회원가입
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   )

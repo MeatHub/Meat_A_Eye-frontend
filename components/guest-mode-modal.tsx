@@ -8,19 +8,21 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createGuestSession, getGuestNickname, setGuestNickname } from "@/lib/api"
+import { useAuth } from "@/contexts/auth-context"
 
 interface GuestModeModalProps {
   onComplete: (nickname: string) => void
 }
 
 export function GuestModeModal({ onComplete }: GuestModeModalProps) {
+  const { login: setAuth } = useAuth()
   const [open, setOpen] = useState(false)
   const [nickname, setNickname] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Check if user has already set a nickname
+    // Check if user has already set a nickname or is authenticated
     const existingNickname = getGuestNickname()
     if (!existingNickname) {
       // Show modal after a brief delay for better UX
@@ -53,17 +55,20 @@ export function GuestModeModal({ onComplete }: GuestModeModalProps) {
 
     try {
       // Create guest session
-      await createGuestSession(nickname.trim())
+      const result = await createGuestSession(nickname.trim())
       
       // Save nickname locally
       setGuestNickname(nickname.trim())
       
+      // Update auth context
+      setAuth(result.token, result.nickname)
+      
       // Close modal and notify parent
       setOpen(false)
       onComplete(nickname.trim())
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to create guest session:", err)
-      setError("세션 생성에 실패했습니다. 다시 시도해주세요.")
+      setError(err.message || "세션 생성에 실패했습니다. 다시 시도해주세요.")
     } finally {
       setLoading(false)
     }
