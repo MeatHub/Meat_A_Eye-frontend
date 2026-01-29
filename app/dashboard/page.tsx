@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppHeader } from "@/components/app-header"
 import { MobileNav } from "@/components/mobile-nav"
@@ -82,7 +82,10 @@ export default function MeatAEyeDashboard() {
             exit="exit"
             transition={{ duration: 0.3 }}
           >
-            <AnalysisView onSaveToFridge={handleSaveToFridge} />
+            <AnalysisView 
+              onSaveToFridge={handleSaveToFridge}
+              onBack={() => setActiveMenu("dashboard")}
+            />
           </motion.div>
         )
       case "recipe":
@@ -162,8 +165,10 @@ export default function MeatAEyeDashboard() {
           />
 
           {/* Content Area */}
-          <main className="flex-1 p-4 pb-20 lg:pb-6 lg:p-6 max-w-7xl mx-auto w-full">
-            {renderView()}
+          <main className="flex-1 p-4 pb-20 lg:pb-6 lg:p-6 max-w-7xl mx-auto w-full relative">
+            <AnimatePresence mode="wait">
+              {renderView()}
+            </AnimatePresence>
           </main>
         </div>
       </div>

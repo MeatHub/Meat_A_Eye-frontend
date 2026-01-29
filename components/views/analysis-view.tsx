@@ -12,14 +12,16 @@ import { analyzeImage, addFridgeItem, getFridgeItems } from "@/lib/api"
 import { getMeatInfoByPartName } from "@/lib/api-meat"
 import { preprocessImage, captureFromVideo, validateImageFile, createImagePreview } from "@/lib/imagePreprocessing"
 import { toast } from "@/components/ui/use-toast"
+import { BackButton } from "@/components/shared/BackButton"
 import type { MeatAnalysisResult } from "@/constants/mockData"
 import type { AIAnalyzeResponse, MeatInfoByPartNameResponse } from "@/types/api"
 
 interface AnalysisViewProps {
   onSaveToFridge: () => void
+  onBack?: () => void
 }
 
-export function AnalysisView({ onSaveToFridge }: AnalysisViewProps) {
+export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   const [mode, setMode] = useState<"vision" | "ocr">("vision")
   const [inputMethod, setInputMethod] = useState<"file" | "camera" | null>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
@@ -260,6 +262,12 @@ export function AnalysisView({ onSaveToFridge }: AnalysisViewProps) {
 
   return (
     <div className="space-y-6">
+      {/* Header with Back Button */}
+      <div className="flex items-center gap-3 mb-4">
+        {onBack && <BackButton onClick={onBack} />}
+        <h2 className="text-2xl font-bold text-foreground">고기 분석</h2>
+      </div>
+
       {/* Mode Toggle */}
       <Card className="bg-card border-primary/20">
         <CardContent className="pt-6">

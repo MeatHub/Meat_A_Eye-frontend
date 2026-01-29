@@ -38,8 +38,11 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
 
   return (
     <aside className="hidden lg:flex flex-col w-72 bg-card border-r border-border h-screen sticky top-0">
-      {/* Logo Header */}
-      <div className="p-6 border-b border-border">
+      {/* Logo Header - 클릭시 홈화면 복귀 */}
+      <button
+        onClick={() => onMenuChange("dashboard")}
+        className="w-full p-6 border-b border-border hover:bg-muted/50 transition-colors text-left"
+      >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
             <Beef className="w-6 h-6 text-primary-foreground" />
@@ -49,7 +52,7 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
             <p className="text-xs text-muted-foreground">AI 축산물 인식 서비스</p>
           </div>
         </div>
-      </div>
+      </button>
 
       {/* Profile Card */}
       <div className="p-4">

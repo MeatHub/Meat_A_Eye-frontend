@@ -40,9 +40,15 @@ export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange, guestNickn
     logout()
   }
 
+  const getMenuLabel = (menuId: string) => {
+    const menu = menuItems.find(m => m.id === menuId)
+    return menu?.label || "대시보드"
+  }
+
   return (
-    <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-sm border-b border-border">
-      <div className="flex items-center justify-between h-14 px-4">
+    <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-sm border-b border-border shadow-sm">
+      <div className="flex flex-col">
+        <div className="flex items-center justify-between h-14 px-4 relative">
         {/* Mobile Menu */}
         <Sheet>
           <SheetTrigger asChild>
@@ -109,20 +115,26 @@ export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange, guestNickn
           </SheetContent>
         </Sheet>
 
-        {/* Logo (Mobile) */}
-        <div className="lg:hidden flex items-center gap-2">
+        {/* Logo (Mobile) - 클릭시 홈화면 복귀 */}
+        <button
+          onClick={() => onMenuChange("dashboard")}
+          className="lg:hidden flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
             <Beef className="w-5 h-5 text-primary-foreground" />
           </div>
           <span className="font-bold text-foreground">Meat-A-Eye</span>
-        </div>
+        </button>
 
-        {/* Desktop Title */}
-        <div className="hidden lg:block">
+        {/* Desktop Title - 클릭시 홈화면 복귀 */}
+        <button
+          onClick={() => onMenuChange("dashboard")}
+          className="hidden lg:block hover:opacity-80 transition-opacity"
+        >
           <h2 className="text-lg font-semibold text-foreground">
             {menuItems.find(m => m.id === activeMenu)?.label || "대시보드"}
           </h2>
-        </div>
+        </button>
 
         {/* Right side buttons */}
         <div className="flex items-center gap-2">
@@ -187,6 +199,7 @@ export function AppHeader({ onRandomRecipe, activeMenu, onMenuChange, guestNickn
               </Button>
             </div>
           )}
+        </div>
         </div>
       </div>
     </header>
