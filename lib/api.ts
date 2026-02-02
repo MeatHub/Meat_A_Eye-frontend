@@ -18,11 +18,16 @@ import type {
   AIAnalyzeResponse,
   LLMRecipeRequest,
   LLMRecipeResponse,
+  PopularCutsResponse,
 } from "@/types/api";
 
 // Environment variables
-const AI_SERVER_URL = process.env.NEXT_PUBLIC_AI_SERVER_URL || "http://localhost:8000";
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const AI_SERVER_URL =
+  process.env.NEXT_PUBLIC_AI_SERVER_URL || "http://localhost:8000";
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://localhost:8000";
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true"; // Default to false - 실전 모드
 
 // JWT Token management
@@ -66,9 +71,15 @@ interface ApiCallOptions {
 
 export async function apiCall<T>(
   endpoint: string,
-  options: ApiCallOptions = {}
+  options: ApiCallOptions = {},
 ): Promise<T> {
-  const { isAiServer = false, method = "GET", body, headers = {}, isMultipart = false } = options;
+  const {
+    isAiServer = false,
+    method = "GET",
+    body,
+    headers = {},
+    isMultipart = false,
+  } = options;
   const baseUrl = isAiServer ? AI_SERVER_URL : BACKEND_URL;
   const url = `${baseUrl}${endpoint}`;
 
@@ -87,7 +98,7 @@ export async function apiCall<T>(
     const response = await fetch(url, {
       method,
       headers,
-      body: isMultipart ? body : (body ? JSON.stringify(body) : undefined),
+      body: isMultipart ? body : body ? JSON.stringify(body) : undefined,
     });
 
     // Handle token expiration (401) - 일부 엔드포인트는 게스트 접근 허용
@@ -100,14 +111,21 @@ export async function apiCall<T>(
       removeAuthToken();
       if (typeof window !== "undefined") {
         // 로그인 페이지로 리다이렉트하지 않고, 에러만 던짐 (게스트 모드 지원)
-        console.warn("인증 토큰이 없거나 만료되었습니다. 게스트 모드로 계속 진행합니다.");
+        console.warn(
+          "인증 토큰이 없거나 만료되었습니다. 게스트 모드로 계속 진행합니다.",
+        );
       }
       throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(errorData.detail || `API Error: ${response.status} ${response.statusText}`);
+      const errorData = await response
+        .json()
+        .catch(() => ({ detail: response.statusText }));
+      throw new Error(
+        errorData.detail ||
+          `API Error: ${response.status} ${response.statusText}`,
+      );
     }
 
     return await response.json();
@@ -121,7 +139,7 @@ export async function apiCall<T>(
 async function apiCallWithMock<T>(
   endpoint: string,
   mockData: T,
-  options: ApiCallOptions = {}
+  options: ApiCallOptions = {},
 ): Promise<T> {
   if (USE_MOCK_DATA) {
     console.log(`[Mock Mode] Returning mock data for: ${endpoint}`);
@@ -141,7 +159,9 @@ async function apiCallWithMock<T>(
 // API Methods
 
 // Auth APIs
-export const signup = async (data: RegisterRequest): Promise<RegisterResponse> => {
+export const signup = async (
+  data: RegisterRequest,
+): Promise<RegisterResponse> => {
   const result = await apiCall<RegisterResponse>("/api/v1/auth/signup", {
     method: "POST",
     body: data,
@@ -168,12 +188,20 @@ export const logout = (): void => {
 export const analyzeImage = async (
   imageFile: File,
   mode: "vision" | "ocr" = "vision",
-  autoAddFridge: boolean = false
+  autoAddFridge: boolean = false,
 ): Promise<AIAnalyzeResponse> => {
   const formData = new FormData();
   formData.append("image", imageFile);
   formData.append("mode", mode);
   formData.append("auto_add_fridge", String(autoAddFridge));
+
+  // 게스트 모드: localStorage에서 guest_id 가져오기
+  if (typeof window !== "undefined") {
+    const guestId = localStorage.getItem("guest_id");
+    if (guestId) {
+      formData.append("guest_id", guestId);
+    }
+  }
 
   return await apiCall<AIAnalyzeResponse>("/api/analyze", {
     method: "POST",
@@ -193,21 +221,29 @@ export const getFridgeItems = async (): Promise<FridgeListResponse> => {
   }
 };
 
-export const addFridgeItem = async (item: FridgeItemAdd): Promise<{ id: number; status: string; alertScheduled: boolean }> => {
-  return await apiCall<{ id: number; status: string; alertScheduled: boolean }>("/api/v1/fridge/item", {
-    method: "POST",
-    body: item,
-  });
+export const addFridgeItem = async (
+  item: FridgeItemAdd,
+): Promise<{ id: number; status: string; alertScheduled: boolean }> => {
+  return await apiCall<{ id: number; status: string; alertScheduled: boolean }>(
+    "/api/v1/fridge/item",
+    {
+      method: "POST",
+      body: item,
+    },
+  );
 };
 
 export const updateFridgeItemStatus = async (
   itemId: number,
-  status: "stored" | "consumed"
+  status: "stored" | "consumed",
 ): Promise<{ success: boolean; status: string }> => {
-  return await apiCall<{ success: boolean; status: string }>(`/api/v1/fridge/${itemId}/status`, {
-    method: "PATCH",
-    body: { status } as FridgeStatusUpdate,
-  });
+  return await apiCall<{ success: boolean; status: string }>(
+    `/api/v1/fridge/${itemId}/status`,
+    {
+      method: "PATCH",
+      body: { status } as FridgeStatusUpdate,
+    },
+  );
 };
 
 export const deleteFridgeItem = async (itemId: number): Promise<void> => {
@@ -229,7 +265,7 @@ export const getRecipeById = async (id: string): Promise<Recipe | null> => {
 
 // LLM Recipe Generation (Backend + LLM)
 export const generateRecipeWithLLM = async (
-  fridgeItems: Array<{ partName: string; name: string }>
+  fridgeItems: Array<{ partName: string; name: string }>,
 ): Promise<string> => {
   const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe", {
     method: "POST",
@@ -251,39 +287,51 @@ export const getPriceData = async (): Promise<PriceData[]> => {
 };
 
 // Meat Facts APIs - 실제 API 구현 시 활성화
-export const getRandomMeatFact = async (): Promise<{ title: string; content: string }> => {
+export const getRandomMeatFact = async (): Promise<{
+  title: string;
+  content: string;
+}> => {
   // TODO: 실제 고기 상식 API 구현
   return { title: "", content: "" };
 };
 
 // User/Guest APIs
-export const createGuestSession = async (nickname: string): Promise<{ token: string; nickname: string; isGuest: boolean }> => {
+export const createGuestSession = async (
+  nickname: string,
+): Promise<{ token: string; nickname: string; isGuest: boolean }> => {
   // localStorage에서 guest_id 가져오기 또는 생성 (UUID 형식)
   let guestId = localStorage.getItem("guest_id");
   if (!guestId) {
     // UUID v4 형식으로 생성
-    const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
+    const uuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+      /[xy]/g,
+      function (c) {
+        const r = (Math.random() * 16) | 0;
+        const v = c === "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      },
+    );
     guestId = uuid;
     localStorage.setItem("guest_id", guestId);
   }
-  
+
   try {
-    const result = await apiCall<{ token: string; nickname: string; isGuest: boolean }>("/api/v1/auth/guest", {
+    const result = await apiCall<{
+      token: string;
+      nickname: string;
+      isGuest: boolean;
+    }>("/api/v1/auth/guest", {
       method: "POST",
       body: {
         browserSessionId: guestId,
         nickname,
       },
     });
-    
+
     // Store token
     setAuthToken(result.token);
     setAuthNickname(result.nickname);
-    
+
     return result;
   } catch (error: any) {
     console.error("Failed to create guest session:", error);
@@ -310,3 +358,14 @@ export const setGuestNickname = (nickname: string): void => {
   }
 };
 
+// Dashboard API
+export const getPopularCuts = async (
+  limit: number = 5,
+): Promise<PopularCutsResponse> => {
+  return apiCall<PopularCutsResponse>(
+    `/api/dashboard/popular-cuts?limit=${limit}`,
+    {
+      method: "GET",
+    },
+  );
+};

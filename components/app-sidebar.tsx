@@ -1,16 +1,26 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { LayoutDashboard, ScanLine, BookOpen, Refrigerator, Beef, TrendingUp, Lightbulb } from "lucide-react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import {
+  LayoutDashboard,
+  ScanLine,
+  BookOpen,
+  Refrigerator,
+  Beef,
+  TrendingUp,
+  Lightbulb,
+} from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { getPopularCuts } from "@/lib/api";
+import type { PopularCutItem } from "@/types/api";
 
 interface AppSidebarProps {
-  activeMenu: string
-  onMenuChange: (menu: string) => void
-  guestNickname?: string
+  activeMenu: string;
+  onMenuChange: (menu: string) => void;
+  guestNickname?: string;
 }
 
 const menuItems = [
@@ -18,23 +28,42 @@ const menuItems = [
   { id: "analysis", label: "AI 분석", icon: ScanLine },
   { id: "fridge", label: "냉장고 관리", icon: Refrigerator },
   { id: "recipe", label: "레시피 탐색", icon: BookOpen },
-]
+];
 
 const meatFacts = [
   "한우의 마블링은 근내지방도라고 부르며, 1++등급은 마블링 비율이 가장 높습니다.",
   "돼지고기는 비타민 B1이 소고기의 10배나 함유되어 있습니다.",
   "양고기의 특유 냄새는 카프릴산 때문이며, 로즈마리로 중화할 수 있습니다.",
   "닭가슴살 100g에는 약 31g의 단백질이 들어있습니다.",
-]
+];
 
-const popularCuts = [
-  { name: "삼겹살", trend: "+12%" },
-  { name: "한우 등심", trend: "+8%" },
-  { name: "닭가슴살", trend: "+15%" },
-]
+export function AppSidebar({
+  activeMenu,
+  onMenuChange,
+  guestNickname = "게스트",
+}: AppSidebarProps) {
+  const [factIndex] = useState(() =>
+    Math.floor(Math.random() * meatFacts.length),
+  );
+  const [popularCuts, setPopularCuts] = useState<PopularCutItem[]>([
+    { name: "삼겹살", count: 0, trend: "+12%", currentPrice: 5000 },
+    { name: "한우 등심", count: 0, trend: "+8%", currentPrice: 12000 },
+    { name: "닭가슴살", count: 0, trend: "+15%", currentPrice: 3000 },
+  ]);
 
-export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스트" }: AppSidebarProps) {
-  const [factIndex] = useState(() => Math.floor(Math.random() * meatFacts.length))
+  useEffect(() => {
+    // 실시간 인기 부위 로드 (KAMIS API 연동)
+    const loadPopularCuts = async () => {
+      try {
+        const response = await getPopularCuts(3);
+        setPopularCuts(response.items);
+      } catch (error) {
+        console.error("Failed to load popular cuts:", error);
+        // 에러 시 기본값 유지
+      }
+    };
+    loadPopularCuts();
+  }, []);
 
   return (
     <aside className="hidden lg:flex flex-col w-72 bg-card border-r border-border h-screen sticky top-0">
@@ -49,7 +78,9 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">Meat-A-Eye</h1>
-            <p className="text-xs text-muted-foreground">AI 축산물 인식 서비스</p>
+            <p className="text-xs text-muted-foreground">
+              AI 축산물 인식 서비스
+            </p>
           </div>
         </div>
       </button>
@@ -66,7 +97,10 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
             <div className="flex-1">
               <p className="font-medium text-foreground">{guestNickname}</p>
               <div className="flex items-center gap-2 mt-1">
-                <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-0">
+                <Badge
+                  variant="secondary"
+                  className="text-xs bg-primary/10 text-primary border-0"
+                >
                   Lv.3 미식가
                 </Badge>
               </div>
@@ -85,8 +119,8 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
       <nav className="flex-1 px-4 py-2">
         <ul className="space-y-1">
           {menuItems.map((item) => {
-            const Icon = item.icon
-            const isActive = activeMenu === item.id
+            const Icon = item.icon;
+            const isActive = activeMenu === item.id;
             return (
               <li key={item.id}>
                 <motion.button
@@ -95,7 +129,7 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
                     "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
                     isActive
                       ? "bg-primary text-primary-foreground shadow-md"
-                      : "text-foreground hover:bg-secondary"
+                      : "text-foreground hover:bg-secondary",
                   )}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -104,7 +138,7 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
                   {item.label}
                 </motion.button>
               </li>
-            )
+            );
           })}
         </ul>
       </nav>
@@ -120,7 +154,9 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
         >
           <div className="flex items-center gap-2 mb-2">
             <Lightbulb className="w-4 h-4 text-primary" />
-            <span className="text-xs font-semibold text-primary">오늘의 고기 상식</span>
+            <span className="text-xs font-semibold text-primary">
+              오늘의 고기 상식
+            </span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
             {meatFacts[factIndex]}
@@ -136,11 +172,16 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
         >
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp className="w-4 h-4 text-primary" />
-            <span className="text-xs font-semibold text-primary">실시간 인기 부위</span>
+            <span className="text-xs font-semibold text-primary">
+              실시간 인기 부위
+            </span>
           </div>
           <ul className="space-y-2">
             {popularCuts.map((cut, idx) => (
-              <li key={cut.name} className="flex items-center justify-between text-xs">
+              <li
+                key={cut.name}
+                className="flex items-center justify-between text-xs"
+              >
                 <span className="flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center text-[10px]">
                     {idx + 1}
@@ -154,5 +195,5 @@ export function AppSidebar({ activeMenu, onMenuChange, guestNickname = "게스�
         </motion.div>
       </div>
     </aside>
-  )
+  );
 }

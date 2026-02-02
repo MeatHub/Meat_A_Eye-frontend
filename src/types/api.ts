@@ -64,6 +64,7 @@ export interface AIAnalyzeResponse {
   partName: string;
   confidence: number;
   historyNo: string | null;
+  heatmap_image?: string | null; // Grad-CAM base64 (data:image/jpeg;base64,...)
   raw: any;
   nutrition?: NutritionInfo | null;
   price?: PriceInfo | null;
@@ -94,3 +95,13 @@ export interface MeatInfoByPartNameResponse {
   storageGuide: string | null;
 }
 
+export interface PopularCutItem {
+  name: string;
+  count: number;
+  trend: string; // "+12%"
+  currentPrice: number | null;
+}
+
+export interface PopularCutsResponse {
+  items: PopularCutItem[];
+}

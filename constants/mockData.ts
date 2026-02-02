@@ -4,7 +4,7 @@ export interface MeatAnalysisResult {
   id: string;
   partName: string;
   confidence: number;
-  gradCAM?: string;
+  gradCAM?: string | null; // Grad-CAM heatmap base64
   timestamp: Date;
   origin?: string;
   grade?: string;
@@ -88,4 +88,3 @@ export const formatDate = (date: Date): string => {
   if (days < 30) return `${Math.floor(days / 7)}주일 전`;
   return `${Math.floor(days / 30)}개월 전`;
 };
-

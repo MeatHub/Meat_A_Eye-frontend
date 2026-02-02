@@ -1,27 +1,47 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { motion } from "framer-motion"
-import { TrendingUp, Beef, BookOpen, AlertCircle } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { LineChart, Line, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
-import { getFridgeItems } from "@/lib/api"
-import { toast } from "@/components/ui/use-toast"
-import type { FridgeItemResponse } from "@/types/api"
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { TrendingUp, Beef, BookOpen, AlertCircle } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+import { getFridgeItems } from "@/lib/api";
+import { toast } from "@/components/ui/use-toast";
+import type { FridgeItemResponse } from "@/types/api";
 
 interface DashboardViewProps {
-  onNavigate: (menu: string) => void
+  onNavigate: (menu: string) => void;
 }
 
 export function DashboardView({ onNavigate }: DashboardViewProps) {
-  const [fridgeItems, setFridgeItems] = useState<FridgeItemResponse[]>([])
-  const [loading, setLoading] = useState(true)
+  const [fridgeItems, setFridgeItems] = useState<FridgeItemResponse[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDashboardData()
-  }, [])
+    loadDashboardData();
+  }, []);
 
   const loadDashboardData = async () => {
     try {
@@ -30,47 +50,73 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
         // getAnalysisHistory(), // 실제 API 구현 시 활성화
         // getPriceData(), // 실제 API 구현 시 활성화
         // getRandomMeatFact(), // 실제 API 구현 시 활성화
-      ])
-      setFridgeItems(fridgeResponse.items.filter(item => item.status === "stored"))
+      ]);
+      setFridgeItems(
+        fridgeResponse.items.filter((item) => item.status === "stored"),
+      );
       // setRecentAnalysis(analysis) // 실제 API 구현 시 활성화
       // setPriceData(prices) // 실제 API 구현 시 활성화
       // setMeatFact(fact) // 실제 API 구현 시 활성화
     } catch (error: any) {
-      console.error("Failed to load dashboard data:", error)
+      console.error("Failed to load dashboard data:", error);
       toast({
         title: "로딩 실패",
         description: error.message || "데이터를 불러오는데 실패했습니다.",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // Sort fridge items by expiry date (already sorted by API, but ensure)
-  const sortedFridgeItems = [...fridgeItems].sort((a, b) => a.dDay - b.dDay)
+  const sortedFridgeItems = [...fridgeItems].sort((a, b) => a.dDay - b.dDay);
 
   // Prepare chart data for meat parts distribution
-  const meatPartsData = fridgeItems.reduce((acc, item) => {
-    const part = item.name
-    acc[part] = (acc[part] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
+  const meatPartsData = fridgeItems.reduce(
+    (acc, item) => {
+      const part = item.name;
+      acc[part] = (acc[part] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 
   const pieData = Object.entries(meatPartsData).map(([name, value]) => ({
     name,
     value,
-  }))
+  }));
 
-  const COLORS = ["#800000", "#A52A2A", "#CD5C5C", "#DC143C", "#B22222", "#8B0000"]
+  const COLORS = [
+    "#800000",
+    "#A52A2A",
+    "#CD5C5C",
+    "#DC143C",
+    "#B22222",
+    "#8B0000",
+  ];
 
   // Prepare expiry date data
   const expiryData = [
-    { range: "D-0~1", count: fridgeItems.filter(item => item.dDay <= 1).length },
-    { range: "D-2~3", count: fridgeItems.filter(item => item.dDay >= 2 && item.dDay <= 3).length },
-    { range: "D-4~7", count: fridgeItems.filter(item => item.dDay >= 4 && item.dDay <= 7).length },
-    { range: "D-8+", count: fridgeItems.filter(item => item.dDay >= 8).length },
-  ]
+    {
+      range: "D-0~1",
+      count: fridgeItems.filter((item) => item.dDay <= 1).length,
+    },
+    {
+      range: "D-2~3",
+      count: fridgeItems.filter((item) => item.dDay >= 2 && item.dDay <= 3)
+        .length,
+    },
+    {
+      range: "D-4~7",
+      count: fridgeItems.filter((item) => item.dDay >= 4 && item.dDay <= 7)
+        .length,
+    },
+    {
+      range: "D-8+",
+      count: fridgeItems.filter((item) => item.dDay >= 8).length,
+    },
+  ];
 
   if (loading) {
     return (
@@ -80,7 +126,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
           <p className="text-muted-foreground">데이터를 불러오는 중...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -110,7 +156,9 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                   transition={{ duration: 0.3 }}
                 >
                   <Beef className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2 text-foreground">아직 분석한 고기가 없습니다</h3>
+                  <h3 className="text-lg font-semibold mb-2 text-foreground">
+                    아직 분석한 고기가 없습니다
+                  </h3>
                   <p className="text-sm mb-4">카메라로 고기를 찍어보세요!</p>
                   <Button
                     onClick={() => onNavigate("analysis")}
@@ -148,8 +196,12 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                     transition={{ duration: 0.3 }}
                   >
                     <AlertCircle className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <h3 className="text-lg font-semibold mb-2 text-foreground">보관 중인 고기가 없습니다</h3>
-                    <p className="text-sm mb-4">고기를 분석하고 냉장고에 추가해보세요!</p>
+                    <h3 className="text-lg font-semibold mb-2 text-foreground">
+                      보관 중인 고기가 없습니다
+                    </h3>
+                    <p className="text-sm mb-4">
+                      고기를 분석하고 냉장고에 추가해보세요!
+                    </p>
                     <Button
                       onClick={() => onNavigate("analysis")}
                       className="bg-primary hover:bg-primary/90"
@@ -161,13 +213,18 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               ) : (
                 <div className="space-y-3">
                   {sortedFridgeItems.slice(0, 5).map((item) => {
-                    const daysLeft = item.dDay
-                    const color = daysLeft <= 1 ? "red" : daysLeft <= 3 ? "yellow" : "green"
+                    const daysLeft = item.dDay;
+                    const color =
+                      daysLeft <= 1
+                        ? "red"
+                        : daysLeft <= 3
+                          ? "yellow"
+                          : "green";
                     const colorClasses = {
                       red: "border-red-500 bg-red-50",
                       yellow: "border-yellow-500 bg-yellow-50",
                       green: "border-green-500 bg-green-50",
-                    }
+                    };
 
                     return (
                       <div
@@ -175,25 +232,30 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                         className={`p-3 rounded-lg border-2 ${colorClasses[color]} transition-all hover:scale-105`}
                       >
                         <div className="flex justify-between items-start mb-1">
-                          <h4 className="font-medium text-sm text-foreground">{item.partName}</h4>
+                          <h4 className="font-medium text-sm text-foreground">
+                            {item.name}
+                          </h4>
                           <Badge
                             variant="outline"
                             className={`text-xs ${
                               color === "red"
                                 ? "border-red-500 text-red-700"
                                 : color === "yellow"
-                                ? "border-yellow-500 text-yellow-700"
-                                : "border-green-500 text-green-700"
+                                  ? "border-yellow-500 text-yellow-700"
+                                  : "border-green-500 text-green-700"
                             }`}
                           >
                             D-{daysLeft}
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          유통기한: {new Date(item.expiryDate).toLocaleDateString("ko-KR")}
+                          유통기한:{" "}
+                          {new Date(item.expiryDate).toLocaleDateString(
+                            "ko-KR",
+                          )}
                         </p>
                       </div>
-                    )
+                    );
                   })}
                   {sortedFridgeItems.length > 5 && (
                     <button
@@ -307,13 +369,18 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
                     >
                       {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
                       ))}
                     </Pie>
                     <Tooltip />
@@ -343,7 +410,11 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={expiryData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E8E4DD" />
-                  <XAxis dataKey="range" stroke="#6B6B6B" style={{ fontSize: "12px" }} />
+                  <XAxis
+                    dataKey="range"
+                    stroke="#6B6B6B"
+                    style={{ fontSize: "12px" }}
+                  />
                   <YAxis stroke="#6B6B6B" style={{ fontSize: "12px" }} />
                   <Tooltip
                     contentStyle={{
@@ -389,5 +460,5 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
         */}
       </div>
     </div>
-  )
+  );
 }

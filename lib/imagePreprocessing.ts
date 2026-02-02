@@ -8,25 +8,26 @@ export interface PreprocessedImage {
   compressedSize: number;
 }
 
+const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3MB (AI 정확도 향상)
+
 /**
  * Preprocesses an image before sending to AI server
- * - Resizes to max 1024px on longest side
- * - Compresses to reduce file size
+ * - Resizes to max 1920px on longest side (AI 분석용 해상도 상향)
+ * - Compresses to 3MB 이하 (최소 품질 0.7 유지)
  * - Converts to base64 data URL
  */
 export async function preprocessImage(
   file: File,
-  maxSize: number = 1024,
-  quality: number = 0.9
+  maxSize: number = 1920,
+  quality: number = 0.92,
+  maxBytes: number = MAX_SIZE_BYTES,
 ): Promise<PreprocessedImage> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = (e) => {
+    const tryCompress = (q: number) => {
       const img = new Image();
-
       img.onload = () => {
-        // Calculate new dimensions
         let width = img.width;
         let height = img.height;
 
@@ -40,7 +41,6 @@ export async function preprocessImage(
           }
         }
 
-        // Create canvas and draw resized image
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
@@ -51,41 +51,42 @@ export async function preprocessImage(
           return;
         }
 
-        // Draw image with smoothing
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Convert to compressed data URL
-        const dataUrl = canvas.toBlob(
+        canvas.toBlob(
           (blob) => {
             if (!blob) {
               reject(new Error("Failed to create blob"));
               return;
             }
-
-            const reader = new FileReader();
-            reader.onloadend = () => {
+            if (blob.size > maxBytes && q > 0.7) {
+              tryCompress(Math.max(0.7, q - 0.1));
+              return;
+            }
+            const r = new FileReader();
+            r.onloadend = () => {
               resolve({
-                dataUrl: reader.result as string,
+                dataUrl: r.result as string,
                 width,
                 height,
                 originalSize: file.size,
                 compressedSize: blob.size,
               });
             };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
+            r.onerror = reject;
+            r.readAsDataURL(blob);
           },
           "image/jpeg",
-          quality
+          q,
         );
       };
-
       img.onerror = reject;
-      img.src = e.target?.result as string;
+      img.src = (reader.result as string) || "";
     };
 
+    reader.onload = () => tryCompress(quality);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -96,10 +97,10 @@ export async function preprocessImage(
  */
 export function captureFromVideo(
   videoElement: HTMLVideoElement,
-  maxSize: number = 1024
+  maxSize: number = 1024,
 ): string {
   const canvas = document.createElement("canvas");
-  
+
   let width = videoElement.videoWidth;
   let height = videoElement.videoHeight;
 
@@ -129,7 +130,10 @@ export function captureFromVideo(
 /**
  * Validates image file
  */
-export function validateImageFile(file: File): { valid: boolean; error?: string } {
+export function validateImageFile(file: File): {
+  valid: boolean;
+  error?: string;
+} {
   // Check file type
   if (!file.type.startsWith("image/")) {
     return { valid: false, error: "이미지 파일만 업로드 가능합니다." };
@@ -155,4 +159,3 @@ export function createImagePreview(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-
