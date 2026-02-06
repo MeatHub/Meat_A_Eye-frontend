@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
-import { signup } from "@/lib/api"
+import { signup, setIsGuest } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { BackButton } from "@/components/shared/BackButton"
 
@@ -41,6 +41,7 @@ export default function SignupPage() {
     setIsLoading(true)
     try {
       const response = await signup(data)
+      setIsGuest(false)
       setAuth(response.token, data.nickname)
       toast({
         title: "회원가입 성공! 🎉",
@@ -60,22 +61,19 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-muted/20">
-      {/* 헤더 영역 */}
-      <div className="p-4">
-        <BackButton className="mb-2" />
-        <h1 className="text-2xl font-bold text-foreground">회원가입</h1>
+      <div className="absolute top-4 left-4 z-10">
+        <BackButton />
       </div>
 
-      {/* 중앙 정렬된 폼 */}
-      <div className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 text-center">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 rounded-2xl bg-[#800000] flex items-center justify-center">
-                <Beef className="w-10 h-10 text-white" />
+      <div className="flex-1 flex items-center justify-center p-4 pt-16">
+        <Card className="w-full max-w-md shadow-lg border-border/80">
+          <CardHeader className="space-y-1 text-center pb-2">
+            <div className="flex justify-center mb-3">
+              <div className="w-14 h-14 rounded-2xl bg-[#800000] flex items-center justify-center">
+                <Beef className="w-8 h-8 text-white" />
               </div>
             </div>
-            <CardTitle className="text-2xl font-bold">회원가입</CardTitle>
+            <CardTitle className="text-xl font-bold">회원가입</CardTitle>
             <CardDescription>
               Meat-A-Eye 계정을 만들어보세요
             </CardDescription>

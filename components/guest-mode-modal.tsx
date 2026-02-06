@@ -1,36 +1,73 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { User, Sparkles } from "lucide-react"
+import { User, Sparkles, LogIn, UserPlus } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createGuestSession, getGuestNickname, setGuestNickname } from "@/lib/api"
+import { createGuestSession, getGuestNickname, setGuestNickname, getAuthToken, getIsGuest } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 
 interface GuestModeModalProps {
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   onComplete: (nickname: string) => void
 }
 
-export function GuestModeModal({ onComplete }: GuestModeModalProps) {
+export function GuestModeModal({ open: controlledOpen, onOpenChange, onComplete }: GuestModeModalProps) {
+  const router = useRouter()
   const { login: setAuth } = useAuth()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const [nickname, setNickname] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = isControlled ? (v: boolean) => onOpenChange?.(v) : setInternalOpen
+
   useEffect(() => {
-    // Check if user has already set a nickname or is authenticated
-    const existingNickname = getGuestNickname()
-    if (!existingNickname) {
-      // Show modal after a brief delay for better UX
-      setTimeout(() => setOpen(true), 500)
-    } else {
-      onComplete(existingNickname)
+    if (!isControlled) {
+      const existingNickname = getGuestNickname()
+      if (!existingNickname) setTimeout(() => setInternalOpen(true), 400)
+      else onComplete(existingNickname)
     }
-  }, [])
+  }, [isControlled])
+
+  const enterAsGuest = async () => {
+    if (getAuthToken() && getIsGuest()) {
+      setOpen(false)
+      onComplete(getGuestNickname() || "게스트")
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await createGuestSession("게스트")
+      setGuestNickname("게스트")
+      setAuth(result.token, result.nickname)
+      setOpen(false)
+      onComplete("게스트")
+    } catch (err: any) {
+      console.error("Failed to create guest session:", err)
+      setError(err.message || "세션 생성에 실패했습니다. 다시 시도해주세요.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const goToLogin = () => {
+    setOpen(false)
+    router.push("/login")
+  }
+
+  const goToSignup = () => {
+    setOpen(false)
+    router.push("/signup")
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,16 +91,9 @@ export function GuestModeModal({ onComplete }: GuestModeModalProps) {
     setError(null)
 
     try {
-      // Create guest session
       const result = await createGuestSession(nickname.trim())
-      
-      // Save nickname locally
       setGuestNickname(nickname.trim())
-      
-      // Update auth context
       setAuth(result.token, result.nickname)
-      
-      // Close modal and notify parent
       setOpen(false)
       onComplete(nickname.trim())
     } catch (err: any) {
@@ -93,34 +123,89 @@ export function GuestModeModal({ onComplete }: GuestModeModalProps) {
           transition={{ duration: 0.3, delay: 0.2 }}
           className="space-y-6 mt-4"
         >
-          {/* Welcome Card */}
-          <div className="bg-secondary rounded-lg p-6 border border-border">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="w-8 h-8 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg text-foreground">비회원으로 시작하기</h3>
-                <p className="text-sm text-muted-foreground">간편하게 서비스를 이용하세요</p>
-              </div>
+          {/* 게스트로 입장 - 1클릭 */}
+          <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+            <Button
+              type="button"
+              onClick={enterAsGuest}
+              disabled={loading}
+              variant="default"
+              className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
+            >
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                  />
+                  접속 중...
+                </span>
+              ) : (
+                <>
+                  <User className="w-5 h-5 mr-2" />
+                  게스트로 입장
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-center text-muted-foreground mt-2">
+              닉네임 없이 바로 이용 (게스트)
+            </p>
+          </motion.div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
             </div>
-            <ul className="space-y-2 text-sm text-muted-foreground">
+            <span className="relative flex justify-center text-xs text-muted-foreground">
+              또는
+            </span>
+          </div>
+
+          {/* 로그인 / 회원가입 */}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 h-11 border-border"
+              onClick={goToLogin}
+              disabled={loading}
+            >
+              <LogIn className="w-4 h-4 mr-2" />
+              로그인
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 h-11 border-border"
+              onClick={goToSignup}
+              disabled={loading}
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              회원가입
+            </Button>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <span className="relative flex justify-center text-xs text-muted-foreground">
+              또는 닉네임 설정
+            </span>
+          </div>
+
+          {/* Welcome Card + Nickname Form */}
+          <div className="bg-secondary rounded-lg p-4 border border-border space-y-4">
+            <h3 className="font-semibold text-sm text-foreground">닉네임을 정하고 시작하기</h3>
+            <ul className="space-y-1.5 text-xs text-muted-foreground">
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                AI 고기 부위 판별 및 이력번호 인식
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                냉장고 보관 관리 및 유통기한 알림
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                AI 레시피 추천 서비스
+                AI 고기 부위 판별 · 냉장고 관리 · 레시피 추천
               </li>
             </ul>
           </div>
 
-          {/* Nickname Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="nickname" className="text-base">

@@ -8,19 +8,24 @@ import {
   BookOpen,
   Refrigerator,
   Beef,
-  TrendingUp,
   Lightbulb,
+  AlertCircle,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { getPopularCuts } from "@/lib/api";
-import type { PopularCutItem } from "@/types/api";
+import { getFridgeItems } from "@/lib/api";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 interface AppSidebarProps {
   activeMenu: string;
   onMenuChange: (menu: string) => void;
-  guestNickname?: string;
 }
 
 const menuItems = [
@@ -40,29 +45,41 @@ const meatFacts = [
 export function AppSidebar({
   activeMenu,
   onMenuChange,
-  guestNickname = "게스트",
 }: AppSidebarProps) {
   const [factIndex] = useState(() =>
-    Math.floor(Math.random() * meatFacts.length),
+    Math.floor(Math.random() * meatFacts.length)
   );
-  const [popularCuts, setPopularCuts] = useState<PopularCutItem[]>([
-    { name: "삼겹살", count: 0, trend: "+12%", currentPrice: 5000 },
-    { name: "한우 등심", count: 0, trend: "+8%", currentPrice: 12000 },
-    { name: "닭가슴살", count: 0, trend: "+15%", currentPrice: 3000 },
+  const [expiryData, setExpiryData] = useState<
+    { range: string; count: number }[]
+  >([
+    { range: "D-0~1", count: 0 },
+    { range: "D-2~3", count: 0 },
+    { range: "D-4~7", count: 0 },
+    { range: "D-8+", count: 0 },
   ]);
 
   useEffect(() => {
-    // 실시간 인기 부위 로드 (KAMIS API 연동)
-    const loadPopularCuts = async () => {
+    const loadFridgeExpiry = async () => {
       try {
-        const response = await getPopularCuts(3);
-        setPopularCuts(response.items);
+        const res = await getFridgeItems();
+        const stored = (res.items || []).filter((i) => i.status === "stored");
+        setExpiryData([
+          { range: "D-0~1", count: stored.filter((i) => i.dDay <= 1).length },
+          {
+            range: "D-2~3",
+            count: stored.filter((i) => i.dDay >= 2 && i.dDay <= 3).length,
+          },
+          {
+            range: "D-4~7",
+            count: stored.filter((i) => i.dDay >= 4 && i.dDay <= 7).length,
+          },
+          { range: "D-8+", count: stored.filter((i) => i.dDay >= 8).length },
+        ]);
       } catch (error) {
-        console.error("Failed to load popular cuts:", error);
-        // 에러 시 기본값 유지
+        console.error("Failed to load fridge for expiry:", error);
       }
     };
-    loadPopularCuts();
+    loadFridgeExpiry();
   }, []);
 
   return (
@@ -85,36 +102,6 @@ export function AppSidebar({
         </div>
       </button>
 
-      {/* Profile Card */}
-      <div className="p-4">
-        <div className="bg-secondary rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="w-12 h-12 border-2 border-primary/20">
-              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                {guestNickname.slice(0, 2)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <p className="font-medium text-foreground">{guestNickname}</p>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge
-                  variant="secondary"
-                  className="text-xs bg-primary/10 text-primary border-0"
-                >
-                  Lv.3 미식가
-                </Badge>
-              </div>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-border">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">이번 달 인식 횟수</span>
-              <span className="font-semibold text-foreground">12회</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Navigation Menu */}
       <nav className="flex-1 px-4 py-2">
         <ul className="space-y-1">
@@ -129,7 +116,7 @@ export function AppSidebar({
                     "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
                     isActive
                       ? "bg-primary text-primary-foreground shadow-md"
-                      : "text-foreground hover:bg-secondary",
+                      : "text-foreground hover:bg-secondary"
                   )}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -163,7 +150,7 @@ export function AppSidebar({
           </p>
         </motion.div>
 
-        {/* Popular Cuts */}
+        {/* 유통기한 임박도 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -171,27 +158,34 @@ export function AppSidebar({
           className="bg-secondary rounded-xl p-4"
         >
           <div className="flex items-center gap-2 mb-3">
-            <TrendingUp className="w-4 h-4 text-primary" />
+            <AlertCircle className="w-4 h-4 text-primary" />
             <span className="text-xs font-semibold text-primary">
-              실시간 인기 부위
+              유통기한 임박도
             </span>
           </div>
-          <ul className="space-y-2">
-            {popularCuts.map((cut, idx) => (
-              <li
-                key={cut.name}
-                className="flex items-center justify-between text-xs"
-              >
-                <span className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center text-[10px]">
-                    {idx + 1}
-                  </span>
-                  <span className="text-foreground">{cut.name}</span>
-                </span>
-                <span className="text-green-600 font-medium">{cut.trend}</span>
-              </li>
-            ))}
-          </ul>
+          <p className="text-[10px] text-muted-foreground mb-2">
+            고기 유통기한 분포
+          </p>
+          <ResponsiveContainer width="100%" height={140}>
+            <BarChart data={expiryData}>
+              <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="range"
+                stroke="hsl(var(--muted-foreground))"
+                style={{ fontSize: "10px" }}
+              />
+              <YAxis stroke="hsl(var(--muted-foreground))" style={{ fontSize: "10px" }} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                }}
+              />
+              <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </motion.div>
       </div>
     </aside>

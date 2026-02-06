@@ -29,6 +29,11 @@ export interface FridgeItemResponse {
   imgUrl: string | null;
   status: "stored" | "consumed";
   expiryDate: string; // ISO date string
+  traceNumber?: string | null;
+  customName?: string | null; // 더 이상 사용하지 않음 (하위 호환성 유지)
+  desiredConsumptionDate?: string | null; // ISO date string
+  grade?: string | null; // 이력정보에서 가져온 등급
+  meatInfoId: number; // 현재 선택된 고기 부위 ID
 }
 
 export interface FridgeListResponse {
@@ -50,6 +55,15 @@ export interface NutritionInfo {
   protein: number | null;
   fat: number | null;
   carbohydrate: number | null;
+  source?: "api" | "cache" | "fallback" | "timeout" | "error";
+}
+
+export interface GradePrice {
+  grade: string;
+  price: number;
+  unit: string;
+  priceDate: string | null;
+  trend: "up" | "down" | "flat";
 }
 
 export interface PriceInfo {
@@ -58,6 +72,45 @@ export interface PriceInfo {
   priceTrend: "up" | "down" | "flat";
   priceDate: string | null;
   priceSource: "api" | "cache" | "fallback";
+  gradePrices?: GradePrice[];
+}
+
+export interface TraceabilityInfo {
+  historyNo?: string | null;
+  blNo?: string | null;
+  partName?: string | null;
+  origin?: string | null;
+  slaughterDate?: string | null;
+  slaughterDateFrom?: string | null;
+  slaughterDateTo?: string | null;
+  processingDateFrom?: string | null;
+  processingDateTo?: string | null;
+  exporter?: string | null;
+  importer?: string | null;
+  importDate?: string | null;
+  partCode?: string | null;
+  companyName?: string | null;
+  recommendedExpiry?: string | null;
+  limitFromDt?: string | null;
+  limitToDt?: string | null;
+  refrigCnvrsAt?: string | null;
+  refrigDistbPdBeginDe?: string | null;
+  refrigDistbPdEndDe?: string | null;
+  birth_date?: string | null;
+  grade?: string | null;
+  source?: string;
+  server_maintenance?: boolean;
+}
+
+export interface FridgeItemFromTraceabilityAdd {
+  partName?: string | null;
+  meatId?: number | null;
+  storageDate: string;
+  expiryDate: string;
+  traceNumber?: string | null;
+  slaughterDate?: string | null;
+  origin?: string | null;
+  companyName?: string | null;
 }
 
 export interface AIAnalyzeResponse {
@@ -68,6 +121,7 @@ export interface AIAnalyzeResponse {
   raw: any;
   nutrition?: NutritionInfo | null;
   price?: PriceInfo | null;
+  traceability?: TraceabilityInfo | null;
 }
 
 export interface LLMRecipeRequest {
@@ -92,6 +146,8 @@ export interface MeatInfoByPartNameResponse {
   priceTrend: "up" | "down" | "flat";
   priceDate: string | null;
   priceSource: "api" | "cache" | "fallback";
+  nutritionSource?: "api" | "cache" | "fallback" | "timeout" | "error";
+  gradePrices?: GradePrice[];
   storageGuide: string | null;
 }
 
@@ -104,4 +160,28 @@ export interface PopularCutItem {
 
 export interface PopularCutsResponse {
   items: PopularCutItem[];
+}
+
+export interface PriceItem {
+  partName: string;
+  category: "beef" | "pork";
+  currentPrice: number;
+  unit: string;
+  priceDate: string | null;
+}
+
+export interface DashboardPricesResponse {
+  beef: PriceItem[];
+  pork: PriceItem[];
+}
+
+export interface PriceHistoryPoint {
+  week: string; // "01.06~01.12" 주 구간 라벨
+  partName: string;
+  price: number;
+}
+
+export interface PriceHistoryResponse {
+  beef: PriceHistoryPoint[];
+  pork: PriceHistoryPoint[];
 }

@@ -9,10 +9,12 @@ export interface PreprocessedImage {
 }
 
 const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3MB (AI 정확도 향상)
+const MIN_SIZE_PX = 260; // EfficientNet-B2 최소 해상도
 
 /**
  * Preprocesses an image before sending to AI server
  * - Resizes to max 1920px on longest side (AI 분석용 해상도 상향)
+ * - 최소 해상도 260px 유지 (EfficientNet-B2 규격)
  * - Compresses to 3MB 이하 (최소 품질 0.7 유지)
  * - Converts to base64 data URL
  */
@@ -31,6 +33,18 @@ export async function preprocessImage(
         let width = img.width;
         let height = img.height;
 
+        // 최소 해상도 260px 강제 유지
+        const aspectRatio = width / height;
+        if (width < MIN_SIZE_PX || height < MIN_SIZE_PX) {
+          if (width > height) {
+            width = Math.max(MIN_SIZE_PX, width);
+            height = Math.max(MIN_SIZE_PX, width / aspectRatio);
+          } else {
+            height = Math.max(MIN_SIZE_PX, height);
+            width = Math.max(MIN_SIZE_PX, height * aspectRatio);
+          }
+        }
+
         if (width > maxSize || height > maxSize) {
           if (width > height) {
             height = (height / width) * maxSize;
@@ -40,6 +54,10 @@ export async function preprocessImage(
             height = maxSize;
           }
         }
+
+        // 최종 해상도가 최소값보다 작으면 강제로 최소값으로 설정
+        width = Math.max(MIN_SIZE_PX, width);
+        height = Math.max(MIN_SIZE_PX, height);
 
         const canvas = document.createElement("canvas");
         canvas.width = width;
@@ -104,6 +122,18 @@ export function captureFromVideo(
   let width = videoElement.videoWidth;
   let height = videoElement.videoHeight;
 
+  // 최소 해상도 260px 강제
+  const aspectRatio = width / height;
+  if (width < MIN_SIZE_PX || height < MIN_SIZE_PX) {
+    if (width > height) {
+      width = Math.max(MIN_SIZE_PX, width);
+      height = Math.max(MIN_SIZE_PX, width / aspectRatio);
+    } else {
+      height = Math.max(MIN_SIZE_PX, height);
+      width = Math.max(MIN_SIZE_PX, height * aspectRatio);
+    }
+  }
+
   // Resize if needed
   if (width > maxSize || height > maxSize) {
     if (width > height) {
@@ -114,6 +144,10 @@ export function captureFromVideo(
       height = maxSize;
     }
   }
+
+  // 최종 해상도가 최소값보다 작으면 강제로 최소값으로 설정
+  width = Math.max(MIN_SIZE_PX, width);
+  height = Math.max(MIN_SIZE_PX, height);
 
   canvas.width = width;
   canvas.height = height;
