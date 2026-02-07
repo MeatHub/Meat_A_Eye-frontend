@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { AlertCircle } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
 import { MobileNav } from "@/components/mobile-nav";
@@ -110,6 +111,33 @@ export default function MeatAEyeDashboard() {
           </motion.div>
         );
       case "fridge":
+        // 게스트 모드 체크
+        if (getIsGuest() || !getAuthToken()) {
+          return (
+            <motion.div
+              key="fridge-blocked"
+              variants={viewVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={{ duration: 0.3 }}
+            >
+              <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center space-y-4">
+                  <div className="w-24 h-24 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+                    <AlertCircle className="w-12 h-12 text-primary" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-foreground">
+                    로그인이 필요합니다
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    냉장고 기능은 로그인 후 이용할 수 있습니다.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          );
+        }
         return (
           <motion.div
             key="fridge"

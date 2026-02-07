@@ -47,11 +47,16 @@ import {
   getMeatInfoList,
   getNutritionInfo,
   getTraceabilityByNumber,
+  getIsGuest,
+  getAuthToken,
 } from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
+import { useRouter } from "next/navigation";
 import type { FridgeItemResponse } from "@/src/types/api";
 
 export function FridgeView() {
+  const router = useRouter();
+  const [isGuest, setIsGuest] = useState(false);
   const [fridgeItems, setFridgeItems] = useState<FridgeItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -89,6 +94,22 @@ export function FridgeView() {
   });
 
   useEffect(() => {
+    // 게스트 모드 체크
+    const checkGuestMode = () => {
+      const token = getAuthToken();
+      const guest = getIsGuest();
+      if (!token || guest) {
+        setIsGuest(true);
+        return false;
+      }
+      setIsGuest(false);
+      return true;
+    };
+
+    if (!checkGuestMode()) {
+      return; // 게스트 모드면 초기화하지 않음
+    }
+
     const initialize = async () => {
       await loadMeatInfoList();
       await loadFridgeItems();
@@ -189,9 +210,20 @@ export function FridgeView() {
   };
 
   const handleAddItem = async () => {
+    // 게스트 모드 체크
+    if (getIsGuest() || !getAuthToken()) {
+      toast({
+        title: "로그인 필요",
+        description: "냉장고 기능은 로그인 후 이용할 수 있습니다.",
+        variant: "destructive",
+      });
+      router.push("/login");
+      return;
+    }
+
     if (!newItem.meatId || !newItem.expiryDate) {
       const errorMsg = "필수 항목을 모두 입력해주세요.";
-      window.alert(errorMsg);
+      // window.alert 제거 - UI 통합 알림만 사용
       toast({
         title: "입력 오류",
         description: errorMsg,
@@ -208,10 +240,10 @@ export function FridgeView() {
       });
 
       const successMsg = `냉장고에 고기가 추가되었습니다. (ID: ${result.id})`;
-      window.alert(successMsg);
       toast({
         title: "추가 완료",
         description: successMsg,
+        duration: 3000,
       });
 
       // Reload items
@@ -227,57 +259,82 @@ export function FridgeView() {
     } catch (error: any) {
       const errorMsg = error.message || "고기 추가에 실패했습니다.";
       console.error("Failed to add item:", error);
-      window.alert(`❌ 추가 실패: ${errorMsg}`);
       toast({
         title: "추가 실패",
         description: errorMsg,
         variant: "destructive",
+        duration: 4000,
       });
     }
   };
 
   const handleDeleteItem = async (id: number) => {
-    if (!confirm("정말 삭제하시겠습니까?")) return;
+    // 게스트 모드 체크
+    if (getIsGuest() || !getAuthToken()) {
+      toast({
+        title: "로그인 필요",
+        description: "냉장고 기능은 로그인 후 이용할 수 있습니다.",
+        variant: "destructive",
+      });
+      router.push("/login");
+      return;
+    }
 
+    // confirm 제거 - 바로 삭제하고 toast로 알림만 표시
     try {
       await deleteFridgeItem(id);
+      // 상태 업데이트 전에 toast 표시
       const successMsg = "고기가 삭제되었습니다.";
-      window.alert(successMsg);
       toast({
         title: "삭제 완료",
         description: successMsg,
+        duration: 3000,
       });
-      setFridgeItems((prev) => prev.filter((item) => item.id !== id));
+      // 상태 업데이트는 약간의 지연 후 실행하여 toast가 먼저 표시되도록
+      setTimeout(() => {
+        setFridgeItems((prev) => prev.filter((item) => item.id !== id));
+      }, 100);
     } catch (error: any) {
       const errorMsg = error.message || "고기 삭제에 실패했습니다.";
       console.error("Failed to delete item:", error);
-      window.alert(`❌ 삭제 실패: ${errorMsg}`);
       toast({
         title: "삭제 실패",
         description: errorMsg,
         variant: "destructive",
+        duration: 4000,
       });
     }
   };
 
   const handleConsumeItem = async (id: number) => {
+    // 게스트 모드 체크
+    if (getIsGuest() || !getAuthToken()) {
+      toast({
+        title: "로그인 필요",
+        description: "냉장고 기능은 로그인 후 이용할 수 있습니다.",
+        variant: "destructive",
+      });
+      router.push("/login");
+      return;
+    }
+
     try {
       await updateFridgeItemStatus(id, "consumed");
       const successMsg = "고기가 소비됨으로 표시되었습니다.";
-      window.alert(successMsg);
       toast({
         title: "상태 변경 완료",
         description: successMsg,
+        duration: 3000,
       });
       await loadFridgeItems();
     } catch (error: any) {
       const errorMsg = error.message || "상태 변경에 실패했습니다.";
       console.error("Failed to update item status:", error);
-      window.alert(`❌ 상태 변경 실패: ${errorMsg}`);
       toast({
         title: "상태 변경 실패",
         description: errorMsg,
         variant: "destructive",
+        duration: 4000,
       });
     }
   };
@@ -333,6 +390,17 @@ export function FridgeView() {
   };
 
   const handleSaveEdit = async (id: number) => {
+    // 게스트 모드 체크
+    if (getIsGuest() || !getAuthToken()) {
+      toast({
+        title: "로그인 필요",
+        description: "냉장고 기능은 로그인 후 이용할 수 있습니다.",
+        variant: "destructive",
+      });
+      router.push("/login");
+      return;
+    }
+
     if (
       !editForm.meatInfoId ||
       editForm.meatInfoId === 0 ||
@@ -366,6 +434,7 @@ export function FridgeView() {
       toast({
         title: "수정 완료",
         description: "고기 정보가 수정되었습니다.",
+        duration: 3000,
       });
       setEditingItemId(null);
       await loadFridgeItems();
@@ -376,6 +445,7 @@ export function FridgeView() {
         title: "수정 실패",
         description: errorMsg,
         variant: "destructive",
+        duration: 4000,
       });
     }
   };
@@ -395,6 +465,53 @@ export function FridgeView() {
     if (daysLeft <= 3) return "yellow";
     return "green";
   };
+
+  // 게스트 모드일 때 접근 차단
+  if (isGuest || (!getAuthToken() && !loading)) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="bg-card border-primary/20 max-w-md w-full">
+          <CardContent className="py-16">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="text-center space-y-6"
+            >
+              <div className="w-24 h-24 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+                <AlertCircle className="w-12 h-12 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold mb-2 text-foreground">
+                  로그인이 필요합니다
+                </h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  냉장고 기능은 로그인 후 이용할 수 있습니다.
+                  <br />
+                  게스트 모드에서는 냉장고 기능을 사용할 수 없습니다.
+                </p>
+              </div>
+              <div className="flex gap-3 justify-center">
+                <Button
+                  onClick={() => router.push("/login")}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  로그인하기
+                </Button>
+                <Button
+                  onClick={() => router.push("/signup")}
+                  variant="outline"
+                  className="border-primary text-primary hover:bg-primary/10"
+                >
+                  회원가입
+                </Button>
+              </div>
+            </motion.div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

@@ -8,20 +8,20 @@ export interface PreprocessedImage {
   compressedSize: number;
 }
 
-const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3MB (AI 정확도 향상)
+const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB (전체 사진 확인을 위해 크기 제한 완화)
 const MIN_SIZE_PX = 260; // EfficientNet-B2 최소 해상도
 
 /**
  * Preprocesses an image before sending to AI server
- * - Resizes to max 1920px on longest side (AI 분석용 해상도 상향)
+ * - 전체 사진 확인을 위해 리사이즈 최소화 (최대 3840px까지 허용)
  * - 최소 해상도 260px 유지 (EfficientNet-B2 규격)
- * - Compresses to 3MB 이하 (최소 품질 0.7 유지)
+ * - 압축 최소화 (품질 0.95 유지, 크롭하지 않음)
  * - Converts to base64 data URL
  */
 export async function preprocessImage(
   file: File,
-  maxSize: number = 1920,
-  quality: number = 0.92,
+  maxSize: number = 3840, // 전체 사진 확인을 위해 크기 제한 완화
+  quality: number = 0.95, // 높은 품질 유지
   maxBytes: number = MAX_SIZE_BYTES,
 ): Promise<PreprocessedImage> {
   return new Promise((resolve, reject) => {
@@ -112,10 +112,11 @@ export async function preprocessImage(
 
 /**
  * Captures image from video stream (webcam)
+ * 전체 사진 확인을 위해 리사이즈 최소화
  */
 export function captureFromVideo(
   videoElement: HTMLVideoElement,
-  maxSize: number = 1024,
+  maxSize: number = 3840, // 전체 사진 확인을 위해 크기 제한 완화
 ): string {
   const canvas = document.createElement("canvas");
 
@@ -158,7 +159,7 @@ export function captureFromVideo(
   }
 
   ctx.drawImage(videoElement, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", 0.9);
+  return canvas.toDataURL("image/jpeg", 0.95); // 높은 품질 유지
 }
 
 /**

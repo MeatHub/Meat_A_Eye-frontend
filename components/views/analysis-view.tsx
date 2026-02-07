@@ -32,6 +32,7 @@ import {
   isBundleNumber,
   addFridgeItemFromTraceability,
   getAuthToken,
+  getIsGuest,
 } from "@/lib/api";
 import { getMeatInfoByPartName } from "@/lib/api-meat";
 import {
@@ -243,7 +244,7 @@ function TraceabilityDetailSections({
         </div>
       )}
 
-      {onSaveToFridge && (
+      {onSaveToFridge && !getIsGuest() && getAuthToken() && (
         <Button
           onClick={onSaveToFridge}
           disabled={saving}
@@ -258,6 +259,13 @@ function TraceabilityDetailSections({
             "냉장고에 저장"
           )}
         </Button>
+      )}
+      {onSaveToFridge && (getIsGuest() || !getAuthToken()) && (
+        <div className="p-4 rounded-lg bg-muted/50 border border-border text-center">
+          <p className="text-sm text-muted-foreground">
+            냉장고 저장 기능은 로그인 후 이용할 수 있습니다.
+          </p>
+        </div>
       )}
     </div>
   );
@@ -297,6 +305,22 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mobileCameraInputRef = useRef<HTMLInputElement>(null);
+
+  // 모바일 기기 감지
+  const isMobileDevice = () => {
+    if (typeof window === "undefined") return false;
+    const userAgent = navigator.userAgent.toLowerCase();
+    return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+      userAgent
+    );
+  };
+
+  // Android 기기 감지
+  const isAndroidDevice = () => {
+    if (typeof window === "undefined") return false;
+    return /android/i.test(navigator.userAgent.toLowerCase());
+  };
 
   // Cleanup camera stream on unmount
   useEffect(() => {
@@ -313,19 +337,188 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   };
 
   const startCamera = async () => {
+    // 모바일 기기에서는 네이티브 카메라 앱 사용 (더 안정적)
+    if (isMobileDevice()) {
+      // 모바일에서는 네이티브 카메라 입력 사용
+      if (mobileCameraInputRef.current) {
+        mobileCameraInputRef.current.click();
+      }
+      return;
+    }
+
+    // 데스크톱에서는 getUserMedia 사용
+    // mediaDevices 지원 여부 확인 (Safari 포함)
+    const hasMediaDevices =
+      navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+    const hasLegacyGetUserMedia =
+      (navigator as any).getUserMedia ||
+      (navigator as any).webkitGetUserMedia ||
+      (navigator as any).mozGetUserMedia;
+
+    if (!hasMediaDevices && !hasLegacyGetUserMedia) {
+      const userAgent = navigator.userAgent.toLowerCase();
+      let browserName = "브라우저";
+      if (userAgent.includes("safari") && !userAgent.includes("chrome")) {
+        browserName = "Safari";
+      } else if (userAgent.includes("chrome")) {
+        browserName = "Chrome";
+      } else if (userAgent.includes("firefox")) {
+        browserName = "Firefox";
+      } else if (userAgent.includes("edge")) {
+        browserName = "Edge";
+      }
+
+      setError(
+        `이 ${browserName} 버전은 카메라를 지원하지 않습니다. 최신 버전으로 업데이트하거나 Chrome, Edge, Firefox를 사용해주세요.`
+      );
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: 1280, height: 720 },
-      });
+      // 데스크톱에서는 기본 카메라 사용 (facingMode 제거)
+      const constraints: MediaStreamConstraints = {
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      };
+
+      let stream: MediaStream;
+      try {
+        // 최신 API 우선 시도
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } else {
+          // 레거시 API (Safari 등)
+          const legacyGetUserMedia =
+            (navigator as any).getUserMedia ||
+            (navigator as any).webkitGetUserMedia ||
+            (navigator as any).mozGetUserMedia;
+          if (legacyGetUserMedia) {
+            stream = await new Promise<MediaStream>((resolve, reject) => {
+              legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+            });
+          } else {
+            throw new Error("getUserMedia not supported");
+          }
+        }
+      } catch (constraintError: any) {
+        // 제약 조건 실패 시 기본 카메라로 재시도
+        console.warn(
+          "고해상도 카메라 접근 실패, 기본 설정으로 재시도:",
+          constraintError
+        );
+        try {
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          } else {
+            const legacyGetUserMedia =
+              (navigator as any).getUserMedia ||
+              (navigator as any).webkitGetUserMedia ||
+              (navigator as any).mozGetUserMedia;
+            if (legacyGetUserMedia) {
+              stream = await new Promise<MediaStream>((resolve, reject) => {
+                legacyGetUserMedia.call(
+                  navigator,
+                  { video: true },
+                  resolve,
+                  reject
+                );
+              });
+            } else {
+              throw new Error("getUserMedia not supported");
+            }
+          }
+        } catch (fallbackError: any) {
+          throw constraintError; // 원래 에러를 다시 던짐
+        }
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
+
+        // 비디오가 로드될 때까지 대기
+        await new Promise<void>((resolve, reject) => {
+          if (!videoRef.current) {
+            reject(new Error("Video element not found"));
+            return;
+          }
+
+          const video = videoRef.current;
+          const timeout = setTimeout(() => {
+            reject(new Error("Video load timeout"));
+          }, 5000);
+
+          const onLoadedMetadata = () => {
+            clearTimeout(timeout);
+            video.removeEventListener("loadedmetadata", onLoadedMetadata);
+            video.removeEventListener("error", onError);
+            resolve();
+          };
+
+          const onError = (e: Event) => {
+            clearTimeout(timeout);
+            video.removeEventListener("loadedmetadata", onLoadedMetadata);
+            video.removeEventListener("error", onError);
+            reject(new Error("Video element error"));
+          };
+
+          video.addEventListener("loadedmetadata", onLoadedMetadata);
+          video.addEventListener("error", onError);
+
+          // 이미 로드된 경우
+          if (video.readyState >= 2) {
+            clearTimeout(timeout);
+            video.removeEventListener("loadedmetadata", onLoadedMetadata);
+            video.removeEventListener("error", onError);
+            resolve();
+          }
+        });
       }
+
       setInputMethod("camera");
       setError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Camera access error:", err);
-      setError("카메라 접근 권한이 필요합니다.");
+
+      // 에러 타입별 구체적인 메시지
+      let errorMessage = "카메라를 시작할 수 없습니다.";
+
+      if (
+        err.name === "NotAllowedError" ||
+        err.name === "PermissionDeniedError"
+      ) {
+        errorMessage =
+          "카메라 접근 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.";
+      } else if (
+        err.name === "NotFoundError" ||
+        err.name === "DevicesNotFoundError"
+      ) {
+        errorMessage =
+          "사용 가능한 카메라를 찾을 수 없습니다. 카메라가 연결되어 있는지 확인해주세요.";
+      } else if (
+        err.name === "NotReadableError" ||
+        err.name === "TrackStartError"
+      ) {
+        errorMessage =
+          "카메라가 다른 애플리케이션에서 사용 중입니다. 다른 앱을 종료하고 다시 시도해주세요.";
+      } else if (
+        err.name === "OverconstrainedError" ||
+        err.name === "ConstraintNotSatisfiedError"
+      ) {
+        errorMessage =
+          "요청한 카메라 설정을 지원하지 않습니다. 기본 설정으로 다시 시도해주세요.";
+      } else if (err.message === "Video load timeout") {
+        errorMessage =
+          "카메라 스트림을 로드하는데 시간이 오래 걸립니다. 다시 시도해주세요.";
+      } else {
+        errorMessage = `카메라 오류: ${
+          err.message || err.name || "알 수 없는 오류"
+        }`;
+      }
+
+      setError(errorMessage);
     }
   };
 
@@ -363,6 +556,40 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     } catch (err) {
       console.error("File preview error:", err);
       setError("이미지를 불러오는데 실패했습니다.");
+    }
+
+    // 입력 필드 리셋 (같은 파일을 다시 선택할 수 있도록)
+    if (event.target) {
+      event.target.value = "";
+    }
+  };
+
+  // 모바일 네이티브 카메라 핸들러
+  const handleMobileCameraSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      setError(validation.error || "올바른 이미지 파일이 아닙니다.");
+      return;
+    }
+
+    try {
+      const preview = await createImagePreview(file);
+      setSelectedImage(preview);
+      setInputMethod("file");
+      setError(null);
+    } catch (err) {
+      console.error("Mobile camera error:", err);
+      setError("사진을 불러오는데 실패했습니다.");
+    }
+
+    // 입력 필드 리셋
+    if (event.target) {
+      event.target.value = "";
     }
   };
 
@@ -423,10 +650,10 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
 
       // Send to backend API with multipart form data (FormData로 전송)
       console.log(
-        `📡 [API REQUEST] POST /api/analyze - mode: ${mode}, file size: ${preprocessedFile.size} bytes, resolution: ${preprocessed.width}x${preprocessed.height}`
+        `[API REQUEST] POST /api/analyze - mode: ${mode}, file size: ${preprocessedFile.size} bytes, resolution: ${preprocessed.width}x${preprocessed.height}`
       );
       const analysisResult = await analyzeImage(preprocessedFile, mode, false); // Don't auto-add to fridge
-      console.log(`✅ [API RESPONSE SUCCESS] 분석 결과:`, analysisResult);
+      console.log(`[API RESPONSE SUCCESS] 분석 결과:`, analysisResult);
       setAnalysisResponse(analysisResult);
 
       // Convert to MeatAnalysisResult format for display
@@ -466,12 +693,12 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       }
     } catch (err: any) {
       console.error(
-        "❌ [API RESPONSE ERROR]: ",
+        "[API RESPONSE ERROR]: ",
         err.response?.data || err.message
       );
       const errorMsg = err.message || "분석에 실패했습니다. 다시 시도해주세요.";
       setError(errorMsg);
-      window.alert(`❌ 분석 실패: ${errorMsg}`);
+      // window.alert 제거 - UI 통합 알림만 사용
     } finally {
       setAnalyzing(false);
     }
@@ -501,14 +728,14 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       return;
     }
 
-    // 국산육 감지: 정확히 12자리 숫자만 (백엔드 로직과 일치)
-    const isDomesticTrace = /^\d{12}$/.test(num); // 정확히 12자리 숫자 이력번호
-    // L로 시작하는 묶음번호도 국산 (예: L12601205379002)
+    // L로 시작하는 묶음번호는 확실히 국산 (예: L12601205379002)
     const isDomesticBundle = /^L\d+$/.test(num);
-    const isDomestic = isDomesticTrace || isDomesticBundle;
 
-    if (isDomestic) {
-      // 국산육: M-Trace 웹사이트로 새 창 열기
+    // 수입 묶음번호 체크 (A + 20자리 이상) - 확실히 수입
+    const isImportBundle = isBundleNumber(num);
+
+    // L로 시작하는 묶음번호는 국산으로 바로 처리
+    if (isDomesticBundle) {
       const mtraceUrl = `https://www.mtrace.go.kr/search.do?mtraceNo=${encodeURIComponent(
         num
       )}`;
@@ -521,39 +748,88 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       return;
     }
 
-    // 수입육: 백엔드 API 호출 (묶음번호 또는 단건)
-    // 백엔드가 자동으로 국산/수입을 구분하므로, 국산이 아닌 모든 경우를 수입으로 처리
-    setManualTraceError(null);
-    setManualTraceability(null);
-    setManualTraceabilityList(null);
-    setSelectedTraceDetail(null);
-    setManualTraceLoading(true);
-    try {
-      // 수입 묶음번호 체크 (A + 20자리 이상)
-      if (isBundleNumber(num)) {
+    // 수입 묶음번호는 바로 처리
+    if (isImportBundle) {
+      setManualTraceError(null);
+      setManualTraceability(null);
+      setManualTraceabilityList(null);
+      setSelectedTraceDetail(null);
+      setManualTraceLoading(true);
+      try {
         const list = await getTraceabilityBundleList(num);
         setManualTraceabilityList(list);
         toast({
           title: "조회 완료",
           description: `묶음 이력 ${list.length}건을 불러왔습니다. 항목을 클릭하면 상세 정보를 볼 수 있습니다.`,
         });
-      } else {
-        // 수입 단건 이력번호 또는 기타 형식
-        const info = await getTraceabilityByNumber(num);
-        setManualTraceability(info);
-        toast({ title: "조회 완료", description: "이력 정보를 불러왔습니다." });
+      } catch (err: any) {
+        const msg =
+          err.response?.data?.detail ||
+          err.message ||
+          "묶음번호 조회에 실패했습니다.";
+        setManualTraceError(msg);
+        toast({
+          title: "조회 실패",
+          description: msg,
+          variant: "destructive",
+        });
+      } finally {
+        setManualTraceLoading(false);
       }
+      return;
+    }
+
+    // 12자리 숫자 이력번호: 백엔드 API로 먼저 확인 (수입육도 12자리일 수 있음)
+    // 백엔드가 성공하면 수입으로 처리, 실패하면 국산으로 처리
+    const is12DigitNumber = /^\d{12}$/.test(num);
+
+    setManualTraceError(null);
+    setManualTraceability(null);
+    setManualTraceabilityList(null);
+    setSelectedTraceDetail(null);
+    setManualTraceLoading(true);
+
+    try {
+      // 백엔드 API로 먼저 조회 시도 (백엔드가 자동으로 국산/수입 구분)
+      const info = await getTraceabilityByNumber(num);
+      // 성공하면 수입으로 처리 (백엔드가 수입 정보를 반환함)
+      setManualTraceability(info);
+      toast({ title: "조회 완료", description: "이력 정보를 불러왔습니다." });
     } catch (err: any) {
-      const msg =
-        err.response?.data?.detail ||
-        err.message ||
-        "이력제 조회에 실패했습니다.";
-      setManualTraceError(msg);
-      toast({
-        title: "조회 실패",
-        description: msg,
-        variant: "destructive",
-      });
+      // 백엔드가 실패하면 12자리 숫자인 경우 국산으로 판단하고 M-Trace로 리다이렉트
+      // 백엔드가 12자리 숫자를 국산으로 판단해서 Domestic API를 호출하고,
+      // 실패하면 Import로 재시도하고, Import도 실패하면 503을 반환함
+      // 502는 HTML 오류 (국산 API 실패)이지만 백엔드가 Import로 재시도하므로,
+      // 최종적으로 503이 반환되면 국산으로 판단
+      const errorStatus = err.response?.status;
+      const errorDetail = err.response?.data?.detail || err.message || "";
+
+      // 12자리 숫자이고, 백엔드가 "이력제 API 연결 실패" 메시지를 반환하면 (Import도 실패한 경우) 국산으로 판단
+      // 또는 502/503 에러인 경우도 국산으로 판단 (백엔드가 Import 재시도 후 실패)
+      if (
+        is12DigitNumber &&
+        (errorStatus === 503 ||
+          (errorStatus === 502 && errorDetail.includes("HTML")) ||
+          errorDetail.includes("이력제 API 연결 실패"))
+      ) {
+        const mtraceUrl = `https://www.mtrace.go.kr/search.do?mtraceNo=${encodeURIComponent(
+          num
+        )}`;
+        window.open(mtraceUrl, "_blank");
+        toast({
+          title: "웹사이트 열림",
+          description:
+            "국산육 이력 정보는 M-Trace 공식 웹사이트에서 확인할 수 있습니다.",
+        });
+      } else {
+        const msg = errorDetail || "이력번호 조회에 실패했습니다.";
+        setManualTraceError(msg);
+        toast({
+          title: "조회 실패",
+          description: msg,
+          variant: "destructive",
+        });
+      }
     } finally {
       setManualTraceLoading(false);
     }
@@ -563,10 +839,12 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     traceInfo: TraceabilityInfo | null
   ) => {
     if (!traceInfo) return;
-    if (!getAuthToken?.()) {
+    
+    // 게스트 모드 체크
+    if (getIsGuest() || !getAuthToken()) {
       toast({
         title: "로그인 필요",
-        description: "냉장고 저장은 로그인 후 이용할 수 있습니다.",
+        description: "냉장고 저장은 로그인 후 이용할 수 있습니다. 게스트 모드에서는 냉장고 기능을 사용할 수 없습니다.",
         variant: "destructive",
       });
       return;
@@ -596,8 +874,10 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       toast({
         title: "저장 완료",
         description: "냉장고에 추가되었습니다.",
+        duration: 3000,
       });
-      onSaveToFridge?.();
+      // onSaveToFridge는 중복 toast를 호출하므로 제거
+      // onSaveToFridge?.();
     } catch (err: any) {
       const msg =
         err.response?.data?.detail ||
@@ -607,6 +887,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
         title: "저장 실패",
         description: msg,
         variant: "destructive",
+        duration: 4000,
       });
     } finally {
       setSavingFromTraceability(false);
@@ -637,6 +918,16 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   };
 
   const handleSaveToFridge = async () => {
+    // 게스트 모드 체크
+    if (getIsGuest() || !getAuthToken()) {
+      toast({
+        title: "로그인 필요",
+        description: "냉장고 저장은 로그인 후 이용할 수 있습니다. 게스트 모드에서는 냉장고 기능을 사용할 수 없습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!analysisResponse || !analysisResponse.partName) {
       toast({
         title: "저장 실패",
@@ -655,24 +946,22 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       await analyzeImage(file, mode, true); // auto_add_fridge = true
 
       const successMsg = `${analysisResponse.partName}이(가) 냉장고에 저장되었습니다.`;
-      window.alert(`✅ 저장 완료! 🎉\n${successMsg}`);
       toast({
-        title: "저장 완료! 🎉",
+        title: "저장 완료",
         description: successMsg,
+        duration: 3000,
       });
 
-      onSaveToFridge();
+      // onSaveToFridge는 중복 toast를 호출하므로 제거하거나 조건부로 호출
+      // onSaveToFridge();
     } catch (error: any) {
       const errorMsg = error.message || "냉장고에 저장하는데 실패했습니다.";
-      console.error(
-        "❌ [API RESPONSE ERROR]: ",
-        error.response?.data || errorMsg
-      );
-      window.alert(`❌ 저장 실패: ${errorMsg}`);
+      console.error("[API RESPONSE ERROR]: ", error.response?.data || errorMsg);
       toast({
         title: "저장 실패",
         description: errorMsg,
         variant: "destructive",
+        duration: 4000,
       });
     } finally {
       setSaving(false);
@@ -897,8 +1186,17 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                 className="w-full h-20 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-semibold gap-3"
               >
                 <Camera className="w-6 h-6" />
-                웹캠으로 촬영하기
+                {isMobileDevice() ? "카메라로 촬영하기" : "웹캠으로 촬영하기"}
               </Button>
+              {/* 모바일 네이티브 카메라 입력 (숨김) */}
+              <input
+                ref={mobileCameraInputRef}
+                type="file"
+                accept="image/*"
+                capture={isAndroidDevice() ? "environment" : undefined}
+                onChange={handleMobileCameraSelect}
+                className="hidden"
+              />
             </motion.div>
           </motion.div>
         ) : inputMethod === "camera" && !selectedImage ? (
@@ -919,6 +1217,18 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                     muted
                     className="w-full h-auto"
                     style={{ minHeight: "400px" }}
+                    onLoadedMetadata={() => {
+                      if (videoRef.current) {
+                        console.log("Video stream ready:", {
+                          width: videoRef.current.videoWidth,
+                          height: videoRef.current.videoHeight,
+                        });
+                      }
+                    }}
+                    onError={(e) => {
+                      console.error("Video element error:", e);
+                      setError("비디오 스트림을 재생할 수 없습니다.");
+                    }}
                   />
                   <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent">
                     <div className="flex gap-2 justify-center">
@@ -969,6 +1279,30 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* 분석 완료 알림 - 가운데 출력 */}
+                {result && !analyzing && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3 }}
+                    className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border-2 border-primary/30 p-6 mb-6"
+                  >
+                    <div className="flex items-center justify-center gap-4">
+                      <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
+                        <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+                      </div>
+                      <div className="text-center flex-1">
+                        <h3 className="text-xl font-bold text-primary mb-1">
+                          분석이 완료되었습니다!
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {result.partName} 부위가 성공적으로 분석되었습니다.
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+                
                 {/* Analysis Result - 반응형 레이아웃 */}
                 {result ? (
                   <div className="flex flex-col lg:flex-row gap-6">
@@ -1083,9 +1417,10 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                                   (meatInfo.nutritionSource === "fallback" ||
                                     meatInfo.nutritionSource === "timeout" ||
                                     meatInfo.nutritionSource === "error") && (
-                                    <div className="mb-2 p-2 rounded bg-yellow-50 border border-yellow-200">
-                                      <p className="text-xs text-yellow-800">
-                                        ⚠️ 실시간 데이터 호출 실패 (사유:{" "}
+                                    <div className="mb-2 p-3 rounded-lg bg-yellow-50/80 border border-yellow-200/50 flex items-start gap-2">
+                                      <AlertCircle className="w-4 h-4 text-yellow-700 flex-shrink-0 mt-0.5" />
+                                      <p className="text-xs text-yellow-800 leading-relaxed">
+                                        실시간 데이터 호출 실패 (사유:{" "}
                                         {meatInfo.nutritionSource === "fallback"
                                           ? "API 응답 없음"
                                           : meatInfo.nutritionSource ===
@@ -1149,9 +1484,10 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                               <CardContent className="space-y-1 text-sm">
                                 {/* Fallback 데이터 안내 */}
                                 {meatInfo.priceSource === "fallback" && (
-                                  <div className="mb-2 p-2 rounded bg-yellow-50 border border-yellow-200">
-                                    <p className="text-xs text-yellow-800">
-                                      ⚠️ 실시간 데이터 호출 실패 (사유: API 응답
+                                  <div className="mb-2 p-3 rounded-lg bg-yellow-50/80 border border-yellow-200/50 flex items-start gap-2">
+                                    <AlertCircle className="w-4 h-4 text-yellow-700 flex-shrink-0 mt-0.5" />
+                                    <p className="text-xs text-yellow-800 leading-relaxed">
+                                      실시간 데이터 호출 실패 (사유: API 응답
                                       없음), 기본 데이터 사용 중
                                     </p>
                                   </div>
@@ -1247,8 +1583,17 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                                     )}
                                   </>
                                 ) : (
-                                  <div className="text-sm text-muted-foreground">
-                                    가격 정보 없음
+                                  <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
+                                    <div className="w-16 h-16 mb-3 rounded-full bg-muted/50 flex items-center justify-center">
+                                      <FileText className="w-8 h-8 text-muted-foreground" />
+                                    </div>
+                                    <p className="text-sm font-medium text-foreground mb-1">
+                                      가격 정보 제공 불가
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      이 부위에 대한 가격정보를 제공하지
+                                      않습니다.
+                                    </p>
                                   </div>
                                 )}
                               </CardContent>
@@ -1256,21 +1601,30 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                           </div>
                         ) : null}
 
-                        {/* 저장 버튼 */}
-                        <Button
-                          onClick={handleSaveToFridge}
-                          disabled={saving}
-                          className="w-full bg-primary hover:bg-primary/90"
-                        >
-                          {saving ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                              저장 중...
-                            </>
-                          ) : (
-                            "냉장고에 저장하기"
-                          )}
-                        </Button>
+                        {/* 저장 버튼 - 게스트 모드일 때 숨김 */}
+                        {!getIsGuest() && getAuthToken() && (
+                          <Button
+                            onClick={handleSaveToFridge}
+                            disabled={saving}
+                            className="w-full bg-primary hover:bg-primary/90"
+                          >
+                            {saving ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                저장 중...
+                              </>
+                            ) : (
+                              "냉장고에 저장하기"
+                            )}
+                          </Button>
+                        )}
+                        {getIsGuest() && (
+                          <div className="p-4 rounded-lg bg-muted/50 border border-border text-center">
+                            <p className="text-sm text-muted-foreground">
+                              냉장고 저장 기능은 로그인 후 이용할 수 있습니다.
+                            </p>
+                          </div>
+                        )}
                       </motion.div>
                     </div>
                   </div>

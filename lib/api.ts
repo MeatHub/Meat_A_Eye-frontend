@@ -26,13 +26,34 @@ import type {
 } from "@/src/types/api";
 
 // Environment variables
+// 동적 백엔드 URL 감지: 모바일에서 접속 시 현재 호스트의 IP 사용
+const getBackendUrl = (): string => {
+  // 환경 변수가 설정되어 있으면 우선 사용
+  if (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL) {
+    return process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  }
+  
+  // 브라우저 환경에서만 동적 감지
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    // localhost나 127.0.0.1이 아니면 (모바일 등) 같은 호스트의 8000 포트 사용
+    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+      return `http://${hostname}:8000`;
+    }
+  }
+  
+  return "http://localhost:8000";
+};
+
 const AI_SERVER_URL =
-  process.env.NEXT_PUBLIC_AI_SERVER_URL || "http://localhost:8000";
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://localhost:8000";
+  process.env.NEXT_PUBLIC_AI_SERVER_URL || "http://localhost:8001";
+const BACKEND_URL = getBackendUrl();
 const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true"; // Default to false - 실전 모드
+
+// 백엔드 URL 로깅 (개발 환경)
+if (typeof window !== "undefined") {
+  console.log("🔧 [BACKEND URL]:", BACKEND_URL, "| Current hostname:", window.location.hostname);
+}
 
 // JWT Token management
 export const getAuthToken = (): string | null => {
@@ -116,11 +137,29 @@ export async function apiCall<T>(
   }
 
   try {
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: isMultipart ? body : body ? JSON.stringify(body) : undefined,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        body: isMultipart ? body : body ? JSON.stringify(body) : undefined,
+      });
+    } catch (fetchError: any) {
+      // 네트워크 에러 (연결 실패, CORS, 타임아웃 등)
+      console.error(`❌ [NETWORK ERROR]: ${url}`, fetchError);
+      const errorMessage = fetchError.message || "네트워크 연결에 실패했습니다.";
+      
+      // 모바일에서 localhost 접근 시도 감지
+      if (url.includes("localhost") && typeof window !== "undefined" && window.location.hostname !== "localhost") {
+        throw new Error(
+          `백엔드 서버에 연결할 수 없습니다. ` +
+          `모바일에서 접속 시 백엔드 서버가 같은 네트워크에 있어야 하며, ` +
+          `백엔드가 ${window.location.hostname}:8000에서 실행 중인지 확인해주세요.`
+        );
+      }
+      
+      throw new Error(`${errorMessage} (URL: ${url})`);
+    }
 
     // Handle token expiration (401) - 일부 엔드포인트는 게스트 접근 허용
     if (response.status === 401) {

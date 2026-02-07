@@ -10,18 +10,14 @@ import {
   Beef,
   Lightbulb,
   AlertCircle,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getFridgeItems } from "@/lib/api";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import type { FridgeItemResponse } from "@/src/types/api";
 
 interface AppSidebarProps {
   activeMenu: string;
@@ -42,6 +38,108 @@ const meatFacts = [
   "닭가슴살 100g에는 약 31g의 단백질이 들어있습니다.",
 ];
 
+// 최근 분석 결과 컴포넌트
+function RecentAnalysisResults({ onNavigate }: { onNavigate: (menu: string) => void }) {
+  const [recentItems, setRecentItems] = useState<FridgeItemResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadRecent = async () => {
+      try {
+        const res = await getFridgeItems();
+        // 최근 추가된 순서로 정렬 (ID 기준 내림차순)
+        const sorted = res.items
+          .filter((i) => i.status === "stored")
+          .sort((a, b) => b.id - a.id)
+          .slice(0, 3);
+        setRecentItems(sorted);
+      } catch (error) {
+        console.error("Failed to load recent items:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadRecent();
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      className="bg-gradient-to-br from-card to-card/50 rounded-xl p-4 border border-border/50 shadow-sm"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <span className="text-xs font-bold text-foreground">
+            최근 분석 결과
+          </span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onNavigate("analysis")}
+          className="h-6 px-2 text-[10px] text-primary hover:text-primary/80"
+        >
+          더보기 →
+        </Button>
+      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+        </div>
+      ) : recentItems.length === 0 ? (
+        <div className="text-center py-4">
+          <Beef className="w-8 h-8 mx-auto mb-2 opacity-30 text-muted-foreground" />
+          <p className="text-[10px] text-muted-foreground mb-2">
+            아직 분석한 고기가 없습니다
+          </p>
+          <Button
+            onClick={() => onNavigate("analysis")}
+            size="sm"
+            className="h-6 px-3 text-[10px] bg-primary hover:bg-primary/90"
+          >
+            분석하기
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {recentItems.map((item) => (
+            <motion.div
+              key={item.id}
+              whileHover={{ scale: 1.02 }}
+              className="p-2 rounded-lg bg-background/60 border border-border/50 hover:border-primary/30 transition-all cursor-pointer"
+              onClick={() => onNavigate("fridge")}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-foreground truncate flex-1">
+                  {item.name}
+                </span>
+                <Badge
+                  variant="outline"
+                  className="text-[9px] h-4 px-1.5 ml-1 border-primary/30 text-primary"
+                >
+                  D-{item.dDay}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                <span>
+                  {new Date(item.expiryDate).toLocaleDateString("ko-KR", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 export function AppSidebar({
   activeMenu,
   onMenuChange,
@@ -49,38 +147,6 @@ export function AppSidebar({
   const [factIndex] = useState(() =>
     Math.floor(Math.random() * meatFacts.length)
   );
-  const [expiryData, setExpiryData] = useState<
-    { range: string; count: number }[]
-  >([
-    { range: "D-0~1", count: 0 },
-    { range: "D-2~3", count: 0 },
-    { range: "D-4~7", count: 0 },
-    { range: "D-8+", count: 0 },
-  ]);
-
-  useEffect(() => {
-    const loadFridgeExpiry = async () => {
-      try {
-        const res = await getFridgeItems();
-        const stored = (res.items || []).filter((i) => i.status === "stored");
-        setExpiryData([
-          { range: "D-0~1", count: stored.filter((i) => i.dDay <= 1).length },
-          {
-            range: "D-2~3",
-            count: stored.filter((i) => i.dDay >= 2 && i.dDay <= 3).length,
-          },
-          {
-            range: "D-4~7",
-            count: stored.filter((i) => i.dDay >= 4 && i.dDay <= 7).length,
-          },
-          { range: "D-8+", count: stored.filter((i) => i.dDay >= 8).length },
-        ]);
-      } catch (error) {
-        console.error("Failed to load fridge for expiry:", error);
-      }
-    };
-    loadFridgeExpiry();
-  }, []);
 
   return (
     <aside className="hidden lg:flex flex-col w-72 bg-card border-r border-border h-screen sticky top-0">
@@ -130,14 +196,17 @@ export function AppSidebar({
         </ul>
       </nav>
 
-      {/* Bottom Widget */}
-      <div className="p-4 space-y-3">
+      {/* Bottom Widget - 최근 분석 결과 */}
+      <div className="p-4 space-y-3 border-t border-border">
+        {/* 최근 분석 결과 */}
+        <RecentAnalysisResults onNavigate={onMenuChange} />
+        
         {/* Today's Meat Fact */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-secondary rounded-xl p-4"
+          className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-4 border border-primary/20"
         >
           <div className="flex items-center gap-2 mb-2">
             <Lightbulb className="w-4 h-4 text-primary" />
@@ -148,44 +217,6 @@ export function AppSidebar({
           <p className="text-xs text-muted-foreground leading-relaxed">
             {meatFacts[factIndex]}
           </p>
-        </motion.div>
-
-        {/* 유통기한 임박도 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-secondary rounded-xl p-4"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <AlertCircle className="w-4 h-4 text-primary" />
-            <span className="text-xs font-semibold text-primary">
-              유통기한 임박도
-            </span>
-          </div>
-          <p className="text-[10px] text-muted-foreground mb-2">
-            고기 유통기한 분포
-          </p>
-          <ResponsiveContainer width="100%" height={140}>
-            <BarChart data={expiryData}>
-              <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="range"
-                stroke="hsl(var(--muted-foreground))"
-                style={{ fontSize: "10px" }}
-              />
-              <YAxis stroke="hsl(var(--muted-foreground))" style={{ fontSize: "10px" }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                }}
-              />
-              <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
         </motion.div>
       </div>
     </aside>
