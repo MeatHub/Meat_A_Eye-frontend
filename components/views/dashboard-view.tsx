@@ -69,6 +69,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   >(null);
 
   // 필터 상태
+  const [selectedCategory, setSelectedCategory] = useState<string>("소"); // 부류: 소, 돼지, 수입 소고기, 수입 돼지고기
   const [selectedRegion, setSelectedRegion] = useState("전국");
   const [selectedPart, setSelectedPart] = useState<string>("전체"); // 통합 부위 선택
   const [selectedGrade, setSelectedGrade] = useState("00"); // 00 = 전체 평균
@@ -78,11 +79,23 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     loadDashboardData();
   }, []);
 
+  // 부류 선택 핸들러: 부류 변경 시 품목과 등급 초기화
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    setSelectedPart("전체");
+    // 수입 소고기나 돼지 선택 시 등급을 "00"으로 강제 설정
+    if (category === "돼지" || category === "수입 돼지고기" || category === "수입 소고기") {
+      setSelectedGrade("00");
+    } else {
+      setSelectedGrade("00");
+    }
+  };
+
   // 부위 선택 핸들러: 돼지 선택 시 등급을 자동으로 "00"으로 변경
   const handlePartChange = (part: string) => {
     setSelectedPart(part);
-    // 돼지 부위 선택 시 등급을 자동으로 전체 평균으로 변경
-    if (part !== "전체" && part.startsWith("Pork_")) {
+    // 돼지 또는 수입 돼지고기 부위 선택 시 등급을 자동으로 전체 평균으로 변경
+    if (part !== "전체" && (part.startsWith("Pork_") || part.startsWith("Import_Pork_"))) {
       setSelectedGrade("00");
     }
   };
@@ -98,29 +111,36 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
       .catch(() => setMonthlyApiConnected(false));
   }, []);
 
+  // 부류와 품목에 따라 올바른 part_name 결정
+  const getPartName = () => {
+    if (selectedPart === "전체") return undefined;
+    return selectedPart;
+  };
+
   const loadDashboardData = async () => {
     setLoading(true);
     try {
+      const partName = getPartName();
       const [fridgeResponse, pricesResponse, historyResponse] =
         await Promise.all([
           getFridgeItems(),
           getDashboardPrices(
             selectedRegion,
-            selectedPart !== "전체" && selectedPart.startsWith("Beef_")
-              ? selectedPart
+            partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
+              ? partName
               : undefined,
-            selectedPart !== "전체" && selectedPart.startsWith("Pork_")
-              ? selectedPart
+            partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
+              ? partName
               : undefined,
             selectedGrade
           ).catch(() => ({ beef: [], pork: [] })),
           getDashboardPriceHistory(
             selectedRegion,
-            selectedPart !== "전체" && selectedPart.startsWith("Beef_")
-              ? selectedPart
+            partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
+              ? partName
               : undefined,
-            selectedPart !== "전체" && selectedPart.startsWith("Pork_")
-              ? selectedPart
+            partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
+              ? partName
               : undefined,
             selectedGrade,
             6
@@ -146,13 +166,14 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   const loadPriceData = async () => {
     setPriceLoading(true);
     try {
+      const partName = getPartName();
       const pricesResponse = await getDashboardPrices(
         selectedRegion,
-        selectedPart !== "전체" && selectedPart.startsWith("Beef_")
-          ? selectedPart
+        partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
+          ? partName
           : undefined,
-        selectedPart !== "전체" && selectedPart.startsWith("Pork_")
-          ? selectedPart
+        partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
+          ? partName
           : undefined,
         selectedGrade
       );
@@ -173,17 +194,25 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   const loadPriceHistory = async () => {
     setHistoryLoading(true);
     try {
+      const partName = getPartName();
+      console.log("가격 이력 조회 요청:", {
+        region: selectedRegion,
+        part: partName,
+        grade: selectedGrade,
+        category: selectedCategory,
+      });
       const res = await getDashboardPriceHistory(
         selectedRegion,
-        selectedPart !== "전체" && selectedPart.startsWith("Beef_")
-          ? selectedPart
+        partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
+          ? partName
           : undefined,
-        selectedPart !== "전체" && selectedPart.startsWith("Pork_")
-          ? selectedPart
+        partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
+          ? partName
           : undefined,
         selectedGrade,
         6 // 최근 6주
       );
+      console.log("가격 이력 조회 응답:", res);
       console.log("주별 가격 이력 로드 성공:", {
         beef: res.beef.length,
         pork: res.pork.length,
@@ -197,6 +226,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
         message: error.message,
         stack: error.stack,
         region: selectedRegion,
+        category: selectedCategory,
         part: selectedPart,
         grade: selectedGrade,
       });
@@ -340,6 +370,88 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
 
   const priceDateInfo = getPriceDateInfo();
 
+  // 부류별 품목(품종) 옵션 정의
+  const categoryOptions: Record<string, { value: string; label: string }[]> = {
+    소: [
+      { value: "전체", label: "전체" },
+      { value: "Beef_Tenderloin", label: "안심" },
+      { value: "Beef_Ribeye", label: "등심" },
+      { value: "Beef_BottomRound", label: "설도" },
+      { value: "Beef_Brisket", label: "양지" },
+      { value: "Beef_Rib", label: "갈비" },
+    ],
+    돼지: [
+      { value: "전체", label: "전체" },
+      { value: "Pork_Shoulder", label: "앞다리" },
+      { value: "Pork_Belly", label: "삼겹살" },
+      { value: "Pork_Rib", label: "갈비" },
+      { value: "Pork_Loin", label: "목심" },
+    ],
+    "수입 소고기": [
+      { value: "전체", label: "전체" },
+      { value: "Import_Beef_Brisket_US", label: "양지(냉장) - 미국산" },
+      { value: "Import_Beef_Brisket_AU", label: "양지(냉장) - 호주산" },
+      { value: "Import_Beef_Rib", label: "갈비 - 전체" },
+      { value: "Import_Beef_Rib_US", label: "갈비 - 미국산" },
+      { value: "Import_Beef_Rib_AU", label: "갈비 - 호주산" },
+      { value: "Import_Beef_Ribeye_US", label: "갈비살 - 미국산" },
+      { value: "Import_Beef_Ribeye_AU", label: "갈비살 - 호주산" },
+      { value: "Import_Beef_ChuckEye_US", label: "척아이롤(냉장) - 미국산" },
+      { value: "Import_Beef_ChuckEye_AU", label: "척아이롤(냉장) - 호주산" },
+      { value: "Import_Beef_ChuckEye_Frozen_US", label: "척아이롤(냉동) - 미국산" },
+      { value: "Import_Beef_ChuckEye_Frozen_AU", label: "척아이롤(냉동) - 호주산" },
+    ],
+    "수입 돼지고기": [
+      { value: "전체", label: "전체" },
+      { value: "Import_Pork_Belly", label: "삼겹살" },
+    ],
+  };
+
+  // 부류별 등급 옵션 정의
+  const gradeOptions: Record<string, { value: string; label: string }[]> = {
+    소: [
+      { value: "00", label: "전체" },
+      { value: "01", label: "1++등급" },
+      { value: "02", label: "1+등급" },
+      { value: "03", label: "1등급" },
+    ],
+    돼지: [
+      { value: "00", label: "전체" },
+    ],
+    "수입 소고기": [
+      { value: "00", label: "전체" },
+      { value: "81", label: "미국산" },
+      { value: "82", label: "호주산" },
+    ],
+    "수입 돼지고기": [
+      { value: "00", label: "전체" },
+    ],
+  };
+
+  // 현재 부류에 맞는 품목 옵션
+  const currentPartOptions = categoryOptions[selectedCategory] || [];
+  // 현재 부류에 맞는 등급 옵션
+  const currentGradeOptions = gradeOptions[selectedCategory] || [];
+  
+  // 등급/원산지 라벨 결정 (수입 소고기는 "원산지", 나머지는 "등급")
+  const getGradeLabel = () => {
+    if (selectedCategory === "수입 소고기") {
+      return "원산지";
+    }
+    return "등급";
+  };
+  
+  // 등급 Select가 비활성화되어야 하는지 확인
+  const isGradeDisabled = () => {
+    return (
+      priceLoading ||
+      historyLoading ||
+      selectedCategory === "돼지" ||
+      selectedCategory === "수입 돼지고기"
+      // 수입 소고기는 원산지 선택이 가능하므로 비활성화하지 않음
+    );
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
       {/* 왼쪽: 실시간 가격정보 + 그래프 */}
@@ -377,12 +489,12 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
           </CardHeader>
           <CardContent className="space-y-4 sm:space-y-6 px-3 sm:px-6">
             {/* 카테고리바 - 트렌디한 디자인 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 sm:p-5 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 rounded-2xl border-2 border-primary/20 shadow-lg backdrop-blur-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4 p-4 sm:p-5 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 rounded-2xl border-2 border-primary/20 shadow-lg backdrop-blur-sm">
               {/* 지역 선택 */}
-              <div className="space-y-2.5">
-                <label className="text-sm sm:text-base font-bold text-foreground/90 flex items-center gap-2 uppercase tracking-wide">
-                  <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></span>
-                  지역
+              <div className="space-y-2 min-w-0">
+                <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
+                  <span className="truncate">지역</span>
                 </label>
                 <Select
                   value={selectedRegion}
@@ -405,11 +517,34 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                 </Select>
               </div>
 
-              {/* 부위 선택 */}
-              <div className="space-y-2.5">
-                <label className="text-sm sm:text-base font-bold text-foreground/90 flex items-center gap-2 uppercase tracking-wide">
-                  <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></span>
-                  부위
+              {/* 부류 선택 (품목) */}
+              <div className="space-y-2 min-w-0">
+                <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
+                  <span className="truncate">품목</span>
+                </label>
+                <Select
+                  value={selectedCategory}
+                  onValueChange={handleCategoryChange}
+                  disabled={priceLoading || historyLoading}
+                >
+                  <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
+                    <SelectValue placeholder="품목 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="소">소</SelectItem>
+                    <SelectItem value="돼지">돼지</SelectItem>
+                    <SelectItem value="수입 소고기">수입 소고기</SelectItem>
+                    <SelectItem value="수입 돼지고기">수입 돼지고기</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 품종 선택 */}
+              <div className="space-y-2 min-w-0">
+                <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
+                  <span className="truncate">품종</span>
                 </label>
                 <Select
                   value={selectedPart}
@@ -417,62 +552,51 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                   disabled={priceLoading || historyLoading}
                 >
                   <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
-                    <SelectValue placeholder="부위 선택" />
+                    <SelectValue placeholder="품종 선택" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="전체">전체</SelectItem>
-                    <div className="px-2 py-2 text-xs sm:text-sm font-bold text-primary border-t border-border mt-1 bg-primary/5">
-                      소고기
-                    </div>
-                    <SelectItem value="Beef_Tenderloin">소/안심</SelectItem>
-                    <SelectItem value="Beef_Ribeye">소/등심</SelectItem>
-                    <SelectItem value="Beef_BottomRound">소/설도</SelectItem>
-                    <SelectItem value="Beef_Brisket">소/양지</SelectItem>
-                    <SelectItem value="Beef_Rib">소/갈비</SelectItem>
-                    <div className="px-2 py-2 text-xs sm:text-sm font-bold text-primary border-t border-border mt-1 bg-primary/5">
-                      돼지고기
-                    </div>
-                    <SelectItem value="Pork_Shoulder">돼지/앞다리</SelectItem>
-                    <SelectItem value="Pork_Belly">돼지/삼겹살</SelectItem>
-                    <SelectItem value="Pork_Rib">돼지/갈비</SelectItem>
-                    <SelectItem value="Pork_Loin">돼지/목심</SelectItem>
+                    {currentPartOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* 등급 선택 */}
-              <div className="space-y-2.5">
-                <label className="text-sm sm:text-base font-bold text-foreground/90 flex items-center gap-2 uppercase tracking-wide">
-                  <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></span>
-                  등급
+              {/* 등급/원산지 선택 */}
+              <div className="space-y-2 min-w-0">
+                <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
+                  <span className="truncate">{getGradeLabel()}</span>
                 </label>
                 <Select
                   value={selectedGrade}
-                  onValueChange={setSelectedGrade}
-                  disabled={priceLoading || historyLoading || (selectedPart !== "전체" && selectedPart.startsWith("Pork_"))}
+                  onValueChange={(value) => {
+                    console.log("등급 변경:", value);
+                    setSelectedGrade(value);
+                  }}
+                  disabled={isGradeDisabled()}
                 >
                   <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
-                    <SelectValue placeholder="등급 선택" />
+                    <SelectValue placeholder={getGradeLabel() + " 선택"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="00">전체 평균</SelectItem>
-                    {selectedPart === "전체" || selectedPart.startsWith("Beef_") ? (
-                      <>
-                        <SelectItem value="01">1++등급</SelectItem>
-                        <SelectItem value="02">1+등급</SelectItem>
-                        <SelectItem value="03">1등급</SelectItem>
-                      </>
-                    ) : null}
+                    {currentGradeOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               {/* 조회 버튼 */}
-              <div className="space-y-2.5 flex items-end">
+              <div className="flex items-end min-w-0">
                 <Button
                   onClick={handleSearch}
                   disabled={priceLoading || historyLoading}
-                  className="w-full h-12 sm:h-11 text-sm sm:text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200"
+                  className="w-full h-12 sm:h-11 text-xs sm:text-sm font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200"
                 >
                   {priceLoading || historyLoading ? (
                     <>
@@ -630,7 +754,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                 )}
 
                 {/* 주별 가격 변동 그래프 */}
-                <div className="mt-8 pt-6 border-t-2 border-border/50">
+                <div className="mt-8 pt-6 border-t-2 border-border/50 relative z-0">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-base font-bold text-foreground flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-primary" />
