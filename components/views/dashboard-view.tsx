@@ -82,7 +82,12 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   // 부류 선택 핸들러: 부류 변경 시 품목과 등급 초기화
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
-    setSelectedPart("전체");
+    // 수입 돼지고기 선택 시 품종을 자동으로 "삼겹살"로 설정
+    if (category === "수입 돼지고기") {
+      setSelectedPart("Import_Pork_Belly");
+    } else {
+      setSelectedPart("전체");
+    }
     // 수입 소고기나 돼지 선택 시 등급을 "00"으로 강제 설정
     if (category === "돼지" || category === "수입 돼지고기" || category === "수입 소고기") {
       setSelectedGrade("00");
@@ -113,17 +118,91 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
 
   // 부류와 품목에 따라 올바른 part_name 결정
   const getPartName = () => {
-    if (selectedPart === "전체") return undefined;
+    if (selectedPart === "전체") {
+      // 수입 소고기/수입 돼지고기 선택 시 "전체"는 undefined 반환
+      // 프론트엔드에서 해당 카테고리의 기본 부위들을 개별적으로 조회
+      return undefined;
+    }
     return selectedPart;
+  };
+
+  // 카테고리별 기본 부위 목록 반환
+  const getDefaultPartsForCategory = () => {
+    if (selectedCategory === "소") {
+      return {
+        beef: ["Beef_Ribeye", "Beef_Rib"], // 등심, 갈비
+        pork: [],
+      };
+    } else if (selectedCategory === "돼지") {
+      return {
+        beef: [],
+        pork: ["Pork_Shoulder", "Pork_Belly", "Pork_Rib", "Pork_Loin"], // 앞다리, 삼겹살, 갈비, 목심
+      };
+    } else if (selectedCategory === "수입 소고기") {
+      return {
+        beef: ["Import_Beef_Rib_US", "Import_Beef_Rib_AU", "Import_Beef_Ribeye_US", "Import_Beef_Ribeye_AU"],
+        pork: [],
+      };
+    } else if (selectedCategory === "수입 돼지고기") {
+      return {
+        beef: [],
+        pork: ["Import_Pork_Belly"],
+      };
+    }
+    return { beef: [], pork: [] };
   };
 
   const loadDashboardData = async () => {
     setLoading(true);
     try {
       const partName = getPartName();
-      const [fridgeResponse, pricesResponse, historyResponse] =
-        await Promise.all([
-          getFridgeItems(),
+      const fridgeResponse = await getFridgeItems();
+      
+      // "전체" 선택 시 카테고리별 기본 부위들을 개별적으로 조회
+      let pricesResponse = { beef: [], pork: [] };
+      let historyResponse = { beef: [], pork: [] };
+      
+      if (partName === undefined) {
+        // "전체" 선택 시: 카테고리별 기본 부위들을 개별적으로 조회
+        const defaultParts = getDefaultPartsForCategory();
+        const allBeefParts: any[] = [];
+        const allPorkParts: any[] = [];
+        const allBeefHistory: any[] = [];
+        const allPorkHistory: any[] = [];
+        
+        // 소고기 기본 부위들 개별 조회
+        for (const beefPart of defaultParts.beef) {
+          try {
+            const [priceRes, historyRes] = await Promise.all([
+              getDashboardPrices(selectedRegion, beefPart, undefined, selectedGrade).catch(() => ({ beef: [], pork: [] })),
+              getDashboardPriceHistory(selectedRegion, beefPart, undefined, selectedGrade, 6).catch(() => ({ beef: [], pork: [] })),
+            ]);
+            allBeefParts.push(...priceRes.beef);
+            allBeefHistory.push(...historyRes.beef);
+          } catch (error) {
+            console.error(`Failed to load ${beefPart}:`, error);
+          }
+        }
+        
+        // 돼지고기 기본 부위들 개별 조회
+        for (const porkPart of defaultParts.pork) {
+          try {
+            const [priceRes, historyRes] = await Promise.all([
+              getDashboardPrices(selectedRegion, undefined, porkPart, selectedGrade).catch(() => ({ beef: [], pork: [] })),
+              getDashboardPriceHistory(selectedRegion, undefined, porkPart, selectedGrade, 6).catch(() => ({ beef: [], pork: [] })),
+            ]);
+            allPorkParts.push(...priceRes.pork);
+            allPorkHistory.push(...historyRes.pork);
+          } catch (error) {
+            console.error(`Failed to load ${porkPart}:`, error);
+          }
+        }
+        
+        pricesResponse = { beef: allBeefParts, pork: allPorkParts };
+        historyResponse = { beef: allBeefHistory, pork: allPorkHistory };
+      } else {
+        // 특정 부위 선택 시: 해당 부위만 조회
+        [pricesResponse, historyResponse] = await Promise.all([
           getDashboardPrices(
             selectedRegion,
             partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
@@ -146,6 +225,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
             6
           ).catch(() => ({ beef: [], pork: [] })),
         ]);
+      }
+      
       setFridgeItems(
         fridgeResponse.items.filter((item) => item.status === "stored")
       );
@@ -167,17 +248,58 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     setPriceLoading(true);
     try {
       const partName = getPartName();
-      const pricesResponse = await getDashboardPrices(
-        selectedRegion,
-        partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
-          ? partName
-          : undefined,
-        partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
-          ? partName
-          : undefined,
-        selectedGrade
-      );
-      setPriceData(pricesResponse);
+      
+      // "전체" 선택 시 카테고리별 기본 부위들을 개별적으로 조회
+      if (partName === undefined) {
+        const defaultParts = getDefaultPartsForCategory();
+        const allBeefParts: any[] = [];
+        const allPorkParts: any[] = [];
+        
+        // 소고기 기본 부위들 개별 조회
+        for (const beefPart of defaultParts.beef) {
+          try {
+            const response = await getDashboardPrices(
+              selectedRegion,
+              beefPart,
+              undefined,
+              selectedGrade
+            );
+            allBeefParts.push(...response.beef);
+          } catch (error) {
+            console.error(`Failed to load ${beefPart}:`, error);
+          }
+        }
+        
+        // 돼지고기 기본 부위들 개별 조회
+        for (const porkPart of defaultParts.pork) {
+          try {
+            const response = await getDashboardPrices(
+              selectedRegion,
+              undefined,
+              porkPart,
+              selectedGrade
+            );
+            allPorkParts.push(...response.pork);
+          } catch (error) {
+            console.error(`Failed to load ${porkPart}:`, error);
+          }
+        }
+        
+        setPriceData({ beef: allBeefParts, pork: allPorkParts });
+      } else {
+        // 특정 부위 선택 시: 해당 부위만 조회
+        const pricesResponse = await getDashboardPrices(
+          selectedRegion,
+          partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
+            ? partName
+            : undefined,
+          partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
+            ? partName
+            : undefined,
+          selectedGrade
+        );
+        setPriceData(pricesResponse);
+      }
     } catch (error: any) {
       console.error("Failed to load price data:", error);
       setPriceData({ beef: [], pork: [] });
@@ -201,25 +323,76 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
         grade: selectedGrade,
         category: selectedCategory,
       });
-      const res = await getDashboardPriceHistory(
-        selectedRegion,
-        partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
-          ? partName
-          : undefined,
-        partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
-          ? partName
-          : undefined,
-        selectedGrade,
-        6 // 최근 6주
-      );
-      console.log("가격 이력 조회 응답:", res);
-      console.log("주별 가격 이력 로드 성공:", {
-        beef: res.beef.length,
-        pork: res.pork.length,
-        beefData: res.beef,
-        porkData: res.pork,
-      });
-      setPriceHistory(res);
+      
+      // "전체" 선택 시 카테고리별 기본 부위들을 개별적으로 조회
+      if (partName === undefined) {
+        const defaultParts = getDefaultPartsForCategory();
+        const allBeefHistory: any[] = [];
+        const allPorkHistory: any[] = [];
+        
+        // 소고기 기본 부위들 개별 조회
+        for (const beefPart of defaultParts.beef) {
+          try {
+            const response = await getDashboardPriceHistory(
+              selectedRegion,
+              beefPart,
+              undefined,
+              selectedGrade,
+              6
+            );
+            allBeefHistory.push(...response.beef);
+          } catch (error) {
+            console.error(`Failed to load history for ${beefPart}:`, error);
+          }
+        }
+        
+        // 돼지고기 기본 부위들 개별 조회
+        for (const porkPart of defaultParts.pork) {
+          try {
+            const response = await getDashboardPriceHistory(
+              selectedRegion,
+              undefined,
+              porkPart,
+              selectedGrade,
+              6
+            );
+            allPorkHistory.push(...response.pork);
+          } catch (error) {
+            console.error(`Failed to load history for ${porkPart}:`, error);
+          }
+        }
+        
+        const res = { beef: allBeefHistory, pork: allPorkHistory };
+        console.log("가격 이력 조회 응답:", res);
+        console.log("주별 가격 이력 로드 성공:", {
+          beef: res.beef.length,
+          pork: res.pork.length,
+          beefData: res.beef,
+          porkData: res.pork,
+        });
+        setPriceHistory(res);
+      } else {
+        // 특정 부위 선택 시: 해당 부위만 조회
+        const res = await getDashboardPriceHistory(
+          selectedRegion,
+          partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
+            ? partName
+            : undefined,
+          partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
+            ? partName
+            : undefined,
+          selectedGrade,
+          6 // 최근 6주
+        );
+        console.log("가격 이력 조회 응답:", res);
+        console.log("주별 가격 이력 로드 성공:", {
+          beef: res.beef.length,
+          pork: res.pork.length,
+          beefData: res.beef,
+          porkData: res.pork,
+        });
+        setPriceHistory(res);
+      }
     } catch (error: any) {
       console.error("Failed to load price history:", error);
       console.error("에러 상세:", {
@@ -389,20 +562,12 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     ],
     "수입 소고기": [
       { value: "전체", label: "전체" },
-      { value: "Import_Beef_Brisket_US", label: "양지(냉장) - 미국산" },
-      { value: "Import_Beef_Brisket_AU", label: "양지(냉장) - 호주산" },
-      { value: "Import_Beef_Rib", label: "갈비 - 전체" },
       { value: "Import_Beef_Rib_US", label: "갈비 - 미국산" },
       { value: "Import_Beef_Rib_AU", label: "갈비 - 호주산" },
       { value: "Import_Beef_Ribeye_US", label: "갈비살 - 미국산" },
       { value: "Import_Beef_Ribeye_AU", label: "갈비살 - 호주산" },
-      { value: "Import_Beef_ChuckEye_US", label: "척아이롤(냉장) - 미국산" },
-      { value: "Import_Beef_ChuckEye_AU", label: "척아이롤(냉장) - 호주산" },
-      { value: "Import_Beef_ChuckEye_Frozen_US", label: "척아이롤(냉동) - 미국산" },
-      { value: "Import_Beef_ChuckEye_Frozen_AU", label: "척아이롤(냉동) - 호주산" },
     ],
     "수입 돼지고기": [
-      { value: "전체", label: "전체" },
       { value: "Import_Pork_Belly", label: "삼겹살" },
     ],
   };
@@ -428,6 +593,39 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     ],
   };
 
+  // 지역 옵션 정의 (apis.py의 REGION_CODE_MAP과 동일)
+  const regionOptions = [
+    { value: "전국", label: "전국" },
+    { value: "서울", label: "서울" },
+    { value: "부산", label: "부산" },
+    { value: "대구", label: "대구" },
+    { value: "인천", label: "인천" },
+    { value: "광주", label: "광주" },
+    { value: "대전", label: "대전" },
+    { value: "울산", label: "울산" },
+    { value: "세종", label: "세종" },
+    { value: "수원", label: "수원" },
+    { value: "성남", label: "성남" },
+    { value: "의정부", label: "의정부" },
+    { value: "용인", label: "용인" },
+    { value: "고양", label: "고양" },
+    { value: "춘천", label: "춘천" },
+    { value: "강릉", label: "강릉" },
+    { value: "청주", label: "청주" },
+    { value: "천안", label: "천안" },
+    { value: "전주", label: "전주" },
+    { value: "군산", label: "군산" },
+    { value: "순천", label: "순천" },
+    { value: "목포", label: "목포" },
+    { value: "포항", label: "포항" },
+    { value: "안동", label: "안동" },
+    { value: "창원", label: "창원" },
+    { value: "마산", label: "마산" },
+    { value: "김해", label: "김해" },
+    { value: "제주", label: "제주" },
+    { value: "온라인", label: "온라인" },
+  ];
+
   // 현재 부류에 맞는 품목 옵션
   const currentPartOptions = categoryOptions[selectedCategory] || [];
   // 현재 부류에 맞는 등급 옵션
@@ -450,6 +648,11 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
       selectedCategory === "수입 돼지고기"
       // 수입 소고기는 원산지 선택이 가능하므로 비활성화하지 않음
     );
+  };
+
+  // 수입 소고기/수입 돼지고기 선택 시 등급/원산지 카테고리 숨기기
+  const shouldHideGradeCategory = () => {
+    return selectedCategory === "수입 소고기" || selectedCategory === "수입 돼지고기";
   };
 
   return (
@@ -489,7 +692,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
           </CardHeader>
           <CardContent className="space-y-4 sm:space-y-6 px-3 sm:px-6">
             {/* 카테고리바 - 트렌디한 디자인 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4 p-4 sm:p-5 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 rounded-2xl border-2 border-primary/20 shadow-lg backdrop-blur-sm">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${shouldHideGradeCategory() ? 'xl:grid-cols-4' : 'xl:grid-cols-5'} gap-3 sm:gap-4 p-4 sm:p-5 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 rounded-2xl border-2 border-primary/20 shadow-lg backdrop-blur-sm`}>
               {/* 지역 선택 */}
               <div className="space-y-2 min-w-0">
                 <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
@@ -505,14 +708,11 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                     <SelectValue placeholder="지역 선택" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="전국">전국</SelectItem>
-                    <SelectItem value="서울">서울</SelectItem>
-                    <SelectItem value="부산">부산</SelectItem>
-                    <SelectItem value="대구">대구</SelectItem>
-                    <SelectItem value="인천">인천</SelectItem>
-                    <SelectItem value="광주">광주</SelectItem>
-                    <SelectItem value="대전">대전</SelectItem>
-                    <SelectItem value="울산">울산</SelectItem>
+                    {regionOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -564,32 +764,34 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                 </Select>
               </div>
 
-              {/* 등급/원산지 선택 */}
-              <div className="space-y-2 min-w-0">
-                <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
-                  <span className="truncate">{getGradeLabel()}</span>
-                </label>
-                <Select
-                  value={selectedGrade}
-                  onValueChange={(value) => {
-                    console.log("등급 변경:", value);
-                    setSelectedGrade(value);
-                  }}
-                  disabled={isGradeDisabled()}
-                >
-                  <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
-                    <SelectValue placeholder={getGradeLabel() + " 선택"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {currentGradeOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* 등급/원산지 선택 - 수입 소고기/수입 돼지고기 선택 시 숨김 */}
+              {!shouldHideGradeCategory() && (
+                <div className="space-y-2 min-w-0">
+                  <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
+                    <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
+                    <span className="truncate">{getGradeLabel()}</span>
+                  </label>
+                  <Select
+                    value={selectedGrade}
+                    onValueChange={(value) => {
+                      console.log("등급 변경:", value);
+                      setSelectedGrade(value);
+                    }}
+                    disabled={isGradeDisabled()}
+                  >
+                    <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
+                      <SelectValue placeholder={getGradeLabel() + " 선택"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currentGradeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* 조회 버튼 */}
               <div className="flex items-end min-w-0">
@@ -624,7 +826,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               <div className="space-y-5">
                 {/* 소고기 섹션 */}
                 {(selectedPart === "전체" ||
-                  selectedPart.startsWith("Beef_")) && (
+                  selectedPart.startsWith("Beef_") ||
+                  selectedPart.startsWith("Import_Beef_")) && (
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -647,7 +850,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                             className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 rounded-xl bg-background/80 hover:bg-background shadow-md hover:shadow-lg transition-all border border-red-200/30 gap-2 sm:gap-0"
                           >
                             <div className="flex-1 min-w-0">
-                              <span className="text-sm sm:text-base font-bold text-foreground block mb-1 truncate">
+                              <span className="text-sm sm:text-base font-bold text-foreground block mb-1 break-words">
                                 {p.partName}
                               </span>
                               {p.priceDate && (
@@ -689,7 +892,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
 
                 {/* 돼지고기 섹션 */}
                 {(selectedPart === "전체" ||
-                  selectedPart.startsWith("Pork_")) && (
+                  selectedPart.startsWith("Pork_") ||
+                  selectedPart.startsWith("Import_Pork_")) && (
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -713,7 +917,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                             className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 rounded-xl bg-background/80 hover:bg-background shadow-md hover:shadow-lg transition-all border border-pink-200/30 gap-2 sm:gap-0"
                           >
                             <div className="flex-1 min-w-0">
-                              <span className="text-sm sm:text-base font-bold text-foreground block mb-1 truncate">
+                              <span className="text-sm sm:text-base font-bold text-foreground block mb-1 break-words">
                                 {p.partName}
                               </span>
                               {p.priceDate && (
