@@ -74,8 +74,9 @@ export function FridgeView() {
   >([]);
   const [editForm, setEditForm] = useState<{
     meatInfoId: number | null;
+    customName: string;
     desiredConsumptionDate: string;
-  }>({ meatInfoId: null, desiredConsumptionDate: "" });
+  }>({ meatInfoId: null, customName: "", desiredConsumptionDate: "" });
   const [nutritionData, setNutritionData] = useState<{
     [itemId: number]: {
       calories: number | null;
@@ -341,9 +342,9 @@ export function FridgeView() {
 
   const handleStartEdit = (item: FridgeItemResponse) => {
     setEditingItemId(item.id);
-    // 편집 모드 시작 시 항상 "부위 선택" placeholder가 보이도록 null로 설정
     setEditForm({
-      meatInfoId: null,
+      meatInfoId: item.meatInfoId && item.meatInfoId > 0 ? item.meatInfoId : null,
+      customName: item.customName ?? "",
       desiredConsumptionDate: item.desiredConsumptionDate
         ? new Date(item.desiredConsumptionDate).toISOString().split("T")[0]
         : "",
@@ -386,7 +387,7 @@ export function FridgeView() {
 
   const handleCancelEdit = () => {
     setEditingItemId(null);
-    setEditForm({ meatInfoId: null, desiredConsumptionDate: "" });
+    setEditForm({ meatInfoId: null, customName: "", desiredConsumptionDate: "" });
   };
 
   const handleSaveEdit = async (id: number) => {
@@ -414,10 +415,22 @@ export function FridgeView() {
       return;
     }
     try {
-      await updateFridgeItem(id, {
+      const res = await updateFridgeItem(id, {
         meatInfoId: editForm.meatInfoId,
+        customName: editForm.customName?.trim() || null,
         desiredConsumptionDate: editForm.desiredConsumptionDate || null,
       });
+      setFridgeItems((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? {
+                ...i,
+                name: res.name,
+                customName: res.customName ?? i.customName,
+              }
+            : i
+        )
+      );
 
       // 저장 후 즉시 영양정보 로드
       const meatInfo = meatInfoList.find((m) => m.id === editForm.meatInfoId);
@@ -857,6 +870,25 @@ export function FridgeView() {
                                 </div>
                               </div>
                             ) : null}
+                            <div className="space-y-1">
+                              <Label className="text-xs">
+                                표시 이름 (선택 사항)
+                              </Label>
+                              <Input
+                                placeholder="예: 우리 집 등심 (레시피에 이 이름이 사용됩니다)"
+                                value={editForm.customName}
+                                onChange={(e) =>
+                                  setEditForm({
+                                    ...editForm,
+                                    customName: e.target.value,
+                                  })
+                                }
+                                className="text-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                비워두면 위에서 선택한 고기 부위명이 사용됩니다.
+                              </p>
+                            </div>
                             <div className="space-y-1">
                               <Label className="text-xs">희망 섭취기간</Label>
                               <Input

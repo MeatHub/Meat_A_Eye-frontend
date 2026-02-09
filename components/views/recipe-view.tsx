@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Clock, ChefHat, Beef, TrendingUp, Wand2 } from "lucide-react";
+import { Search, Clock, ChefHat, Beef, TrendingUp, Wand2, Loader2, Shuffle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,8 +12,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { getRecipes } from "@/lib/api";
+import { getRecipes, generateRandomRecipeFromFridge } from "@/lib/api";
+import { toast } from "@/components/ui/use-toast";
+import ReactMarkdown from "react-markdown";
 import type { Recipe } from "@/constants/mockData";
 
 const categories = ["전체", "소고기", "돼지고기"];
@@ -40,6 +49,9 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
   const [activeCategory, setActiveCategory] = useState("전체");
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showRandomModal, setShowRandomModal] = useState(false);
+  const [randomRecipeContent, setRandomRecipeContent] = useState("");
+  const [loadingRandom, setLoadingRandom] = useState(false);
 
   useEffect(() => {
     loadRecipes();
@@ -61,6 +73,27 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
   const filteredRecipes = recipes.filter((recipe) => {
     return recipe.name.toLowerCase().includes(searchQuery.toLowerCase());
   });
+
+  const handleRandomRecipe = async () => {
+    setLoadingRandom(true);
+    setRandomRecipeContent("");
+    try {
+      const recipe = await generateRandomRecipeFromFridge();
+      setRandomRecipeContent(recipe);
+      setShowRandomModal(true);
+    } catch (err: any) {
+      const msg = err.message || "다시 시도해주세요.";
+      toast({
+        title: msg.includes("401") || msg.includes("로그인") ? "로그인 필요" : "레시피 생성 실패",
+        description: msg.includes("401") || msg.includes("로그인")
+          ? "냉장고에서 랜덤 레시피는 로그인 후 이용할 수 있습니다."
+          : msg,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingRandom(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -88,20 +121,33 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
                 부위별 다양한 요리법을 찾아보세요
               </CardDescription>
             </div>
-            {onOpenLLMRecipe && (
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
+            <div className="flex flex-wrap gap-2">
+              {onOpenLLMRecipe && (
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <button
+                    onClick={onOpenLLMRecipe}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm"
+                  >
+                    <Wand2 className="w-4 h-4" />
+                    AI로 레시피 생성
+                  </button>
+                </motion.div>
+              )}
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <button
-                  onClick={onOpenLLMRecipe}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm"
+                  onClick={handleRandomRecipe}
+                  disabled={loadingRandom}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-primary text-primary hover:bg-primary/10 font-medium text-sm disabled:opacity-50"
                 >
-                  <Wand2 className="w-4 h-4" />
-                  AI로 레시피 생성
+                  {loadingRandom ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Shuffle className="w-4 h-4" />
+                  )}
+                  랜덤 레시피
                 </button>
               </motion.div>
-            )}
+            </div>
           </div>
         </CardHeader>
       </Card>
@@ -199,6 +245,27 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
           <p className="text-muted-foreground">검색 결과가 없습니다</p>
         </motion.div>
       )}
+
+      {/* 랜덤 레시피 모달 */}
+      <Dialog open={showRandomModal} onOpenChange={setShowRandomModal}>
+        <DialogContent className="max-w-4xl bg-card max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl text-primary">
+              <Shuffle className="w-5 h-5" />
+              랜덤 레시피 (냉장고 고기 1종)
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            {randomRecipeContent ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none py-4">
+                <ReactMarkdown>{randomRecipeContent}</ReactMarkdown>
+              </div>
+            ) : (
+              <p className="text-muted-foreground py-4">레시피를 불러오는 중...</p>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

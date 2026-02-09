@@ -338,11 +338,16 @@ export const deleteFridgeItem = async (itemId: number): Promise<void> => {
 
 export const updateFridgeItem = async (
   itemId: number,
-  data: { meatInfoId?: number; desiredConsumptionDate?: string | null }
+  data: {
+    meatInfoId?: number;
+    customName?: string | null;
+    desiredConsumptionDate?: string | null;
+  }
 ): Promise<{
   success: boolean;
   id: number;
   meatInfoId: number;
+  customName: string | null;
   desiredConsumptionDate: string | null;
   name: string;
 }> => {
@@ -350,6 +355,7 @@ export const updateFridgeItem = async (
     success: boolean;
     id: number;
     meatInfoId: number;
+    customName: string | null;
     desiredConsumptionDate: string | null;
     name: string;
   }>(`/api/v1/fridge/${itemId}`, {
@@ -450,6 +456,24 @@ export const generateRecipeWithLLM = async (
   const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe", {
     method: "POST",
     body: { fridgeItems } as LLMRecipeRequest,
+  });
+  return response.recipe;
+};
+
+/** 분석한 부위 1개로 레시피 생성 (인증 불필요) */
+export const generateRecipeForPart = async (partName: string): Promise<string> => {
+  const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe-for-part", {
+    method: "POST",
+    body: { partName },
+  });
+  return response.recipe;
+};
+
+/** 냉장고에서 랜덤 1부위 골라 레시피 생성 (로그인 필요) */
+export const generateRandomRecipeFromFridge = async (): Promise<string> => {
+  const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe-random", {
+    method: "POST",
+    body: {},
   });
   return response.recipe;
 };

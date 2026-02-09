@@ -11,6 +11,7 @@ import {
   FileText,
   Sparkles,
   AlertCircle,
+  ChefHat,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import ReactMarkdown from "react-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -33,6 +42,7 @@ import {
   addFridgeItemFromTraceability,
   getAuthToken,
   getIsGuest,
+  generateRecipeForPart,
 } from "@/lib/api";
 import { getMeatInfoByPartName } from "@/lib/api-meat";
 import {
@@ -300,6 +310,9 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   const [manualTraceLoading, setManualTraceLoading] = useState(false);
   const [manualTraceError, setManualTraceError] = useState<string | null>(null);
   const [savingFromTraceability, setSavingFromTraceability] = useState(false);
+  const [showRecipeForPartModal, setShowRecipeForPartModal] = useState(false);
+  const [recipeForPartContent, setRecipeForPartContent] = useState<string>("");
+  const [loadingRecipeForPart, setLoadingRecipeForPart] = useState(false);
 
   // Camera refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -968,6 +981,32 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     }
   };
 
+  const handleRecipeForPart = async () => {
+    if (!analysisResponse?.partName) {
+      toast({
+        title: "부위 정보 없음",
+        description: "먼저 고기 부위를 분석해주세요.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLoadingRecipeForPart(true);
+    setRecipeForPartContent("");
+    try {
+      const recipe = await generateRecipeForPart(analysisResponse.partName);
+      setRecipeForPartContent(recipe);
+      setShowRecipeForPartModal(true);
+    } catch (err: any) {
+      toast({
+        title: "레시피 생성 실패",
+        description: err.message || "다시 시도해주세요.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingRecipeForPart(false);
+    }
+  };
+
   const reset = () => {
     setSelectedImage(null);
     setResult(null);
@@ -1601,6 +1640,25 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                           </div>
                         ) : null}
 
+                        {/* 이 부위 레시피 추천 (분석 결과 있을 때만) */}
+                        <Button
+                          onClick={handleRecipeForPart}
+                          disabled={loadingRecipeForPart}
+                          variant="outline"
+                          className="w-full border-primary text-primary hover:bg-primary/10"
+                        >
+                          {loadingRecipeForPart ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              레시피 생성 중...
+                            </>
+                          ) : (
+                            <>
+                              <ChefHat className="w-4 h-4 mr-2" />
+                              이 부위 레시피 추천
+                            </>
+                          )}
+                        </Button>
                         {/* 저장 버튼 - 게스트 모드일 때 숨김 */}
                         {!getIsGuest() && getAuthToken() && (
                           <Button
@@ -1679,6 +1737,27 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
           {error}
         </motion.div>
       )}
+
+      {/* 이 부위 레시피 추천 모달 */}
+      <Dialog open={showRecipeForPartModal} onOpenChange={setShowRecipeForPartModal}>
+        <DialogContent className="max-w-4xl bg-card max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl text-primary">
+              <ChefHat className="w-5 h-5" />
+              {result?.partName} 레시피 추천
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            {recipeForPartContent ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none py-4">
+                <ReactMarkdown>{recipeForPartContent}</ReactMarkdown>
+              </div>
+            ) : (
+              <p className="text-muted-foreground py-4">레시피를 불러오는 중...</p>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
