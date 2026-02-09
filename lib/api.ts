@@ -450,8 +450,9 @@ export const getRecipeById = async (id: string): Promise<Recipe | null> => {
 };
 
 // LLM Recipe Generation (Backend + LLM)
+// 백엔드가 DB에서 직접 냉장고 아이템을 조회하므로 빈 배열 전송
 export const generateRecipeWithLLM = async (
-  fridgeItems: Array<{ partName: string; name: string }>
+  fridgeItems: Array<{ partName: string; name: string }> = []
 ): Promise<string> => {
   const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe", {
     method: "POST",

@@ -1740,22 +1740,24 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
 
       {/* 이 부위 레시피 추천 모달 */}
       <Dialog open={showRecipeForPartModal} onOpenChange={setShowRecipeForPartModal}>
-        <DialogContent className="max-w-4xl bg-card max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-4xl bg-card max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
             <DialogTitle className="flex items-center gap-2 text-xl text-primary">
               <ChefHat className="w-5 h-5" />
               {result?.partName} 레시피 추천
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 -mx-6 px-6">
-            {recipeForPartContent ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none py-4">
-                <ReactMarkdown>{recipeForPartContent}</ReactMarkdown>
-              </div>
-            ) : (
-              <p className="text-muted-foreground py-4">레시피를 불러오는 중...</p>
-            )}
-          </ScrollArea>
+          <div className="flex-1 min-h-0 overflow-hidden px-6">
+            <ScrollArea className="h-full">
+              {recipeForPartContent ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none py-4">
+                  <ReactMarkdown>{recipeForPartContent}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-muted-foreground py-4">레시피를 불러오는 중...</p>
+              )}
+            </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
