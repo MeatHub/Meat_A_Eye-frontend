@@ -12,18 +12,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { getRecipes, generateRandomRecipeFromFridge } from "@/lib/api";
+import { getRecipes, getSavedRecipes } from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
 import type { Recipe } from "@/constants/mockData";
+import { LLMRecipeModal } from "@/components/llm-recipe-modal";
 
 const categories = ["전체", "소고기", "돼지고기"];
 
@@ -48,20 +42,29 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("전체");
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>([]); // 전체 레시피 캐시
   const [loading, setLoading] = useState(true);
-  const [showRandomModal, setShowRandomModal] = useState(false);
-  const [randomRecipeContent, setRandomRecipeContent] = useState("");
-  const [loadingRandom, setLoadingRandom] = useState(false);
+  const [showAIRandomModal, setShowAIRandomModal] = useState(false);
+  const [showFridgeRandomModal, setShowFridgeRandomModal] = useState(false);
+  const [showSavedRecipeModal, setShowSavedRecipeModal] = useState(false);
+  const [selectedRecipeContent, setSelectedRecipeContent] = useState<string>("");
+  const [selectedRecipeTitle, setSelectedRecipeTitle] = useState<string>("");
 
+  // 초기 로드만 실행
   useEffect(() => {
-    loadRecipes();
-  }, [activeCategory]);
+    loadAllRecipes();
+  }, []);
 
-  const loadRecipes = async () => {
+  // 카테고리 변경 시 필터링만 수행 (로딩 없이)
+  useEffect(() => {
+    filterRecipes();
+  }, [activeCategory, allRecipes]);
+
+  const loadAllRecipes = async () => {
     setLoading(true);
     try {
-      const meatType = activeCategory === "전체" ? undefined : activeCategory;
-      const data = await getRecipes(meatType);
+      const data = await getRecipes(); // 전체 레시피 로드
+      setAllRecipes(data);
       setRecipes(data);
     } catch (error) {
       console.error("Failed to load recipes:", error);
@@ -70,32 +73,42 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
     }
   };
 
+  const filterRecipes = () => {
+    if (activeCategory === "전체") {
+      setRecipes(allRecipes);
+    } else {
+      const filtered = allRecipes.filter((recipe) => recipe.meatType === activeCategory);
+      setRecipes(filtered);
+    }
+  };
+
+  const handleRecipeClick = async (recipeId: string) => {
+    try {
+      // 저장된 레시피 전체 정보 가져오기
+      const response = await getSavedRecipes();
+      const savedRecipe = response.recipes.find((r) => String(r.id) === recipeId);
+      if (savedRecipe) {
+        setSelectedRecipeContent(savedRecipe.content);
+        setSelectedRecipeTitle(savedRecipe.title);
+        setShowSavedRecipeModal(true);
+      }
+    } catch (error) {
+      console.error("Failed to load recipe details:", error);
+      toast({
+        title: "레시피를 불러올 수 없습니다",
+        description: "다시 시도해주세요.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const filteredRecipes = recipes.filter((recipe) => {
     return recipe.name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const handleRandomRecipe = async () => {
-    setLoadingRandom(true);
-    setRandomRecipeContent("");
-    try {
-      const recipe = await generateRandomRecipeFromFridge();
-      setRandomRecipeContent(recipe);
-      setShowRandomModal(true);
-    } catch (err: any) {
-      const msg = err.message || "다시 시도해주세요.";
-      toast({
-        title: msg.includes("401") || msg.includes("로그인") ? "로그인 필요" : "레시피 생성 실패",
-        description: msg.includes("401") || msg.includes("로그인")
-          ? "냉장고에서 랜덤 레시피는 로그인 후 이용할 수 있습니다."
-          : msg,
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingRandom(false);
-    }
-  };
 
-  if (loading) {
+  // 초기 로딩만 전체 화면 표시
+  if (loading && allRecipes.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
@@ -122,29 +135,22 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
-              {onOpenLLMRecipe && (
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <button
-                    onClick={onOpenLLMRecipe}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm"
-                  >
-                    <Wand2 className="w-4 h-4" />
-                    AI로 레시피 생성
-                  </button>
-                </motion.div>
-              )}
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <button
-                  onClick={handleRandomRecipe}
-                  disabled={loadingRandom}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-primary text-primary hover:bg-primary/10 font-medium text-sm disabled:opacity-50"
+                  onClick={() => setShowAIRandomModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm"
                 >
-                  {loadingRandom ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Shuffle className="w-4 h-4" />
-                  )}
-                  랜덤 레시피
+                  <Wand2 className="w-4 h-4" />
+                  AI로 레시피 생성
+                </button>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <button
+                  onClick={() => setShowFridgeRandomModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-primary text-primary hover:bg-primary/10 font-medium text-sm"
+                >
+                  <Shuffle className="w-4 h-4" />
+                  냉장고 랜덤 레시피
                 </button>
               </motion.div>
             </div>
@@ -194,7 +200,10 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <Card className="bg-card border-primary/20 shadow-md hover:shadow-lg transition-all cursor-pointer">
+            <Card 
+              className="bg-card border-primary/20 shadow-md hover:shadow-lg transition-all cursor-pointer"
+              onClick={() => handleRecipeClick(recipe.id)}
+            >
               <CardContent className="p-4">
                 <div className="flex gap-4">
                   <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0">
@@ -246,26 +255,29 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
         </motion.div>
       )}
 
-      {/* 랜덤 레시피 모달 */}
-      <Dialog open={showRandomModal} onOpenChange={setShowRandomModal}>
-        <DialogContent className="max-w-4xl bg-card max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-xl text-primary">
-              <Shuffle className="w-5 h-5" />
-              랜덤 레시피 (냉장고 고기 1종)
-            </DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="flex-1 -mx-6 px-6">
-            {randomRecipeContent ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none py-4">
-                <ReactMarkdown>{randomRecipeContent}</ReactMarkdown>
-              </div>
-            ) : (
-              <p className="text-muted-foreground py-4">레시피를 불러오는 중...</p>
-            )}
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
+      {/* AI 랜덤 레시피 모달 (아무 고기) */}
+      <LLMRecipeModal
+        open={showAIRandomModal}
+        onOpenChange={setShowAIRandomModal}
+        source="ai_random"
+        onRecipeSaved={loadAllRecipes}
+      />
+
+      {/* 냉장고 랜덤 레시피 모달 */}
+      <LLMRecipeModal
+        open={showFridgeRandomModal}
+        onOpenChange={setShowFridgeRandomModal}
+        source="fridge_random"
+        onRecipeSaved={loadAllRecipes}
+      />
+
+      {/* 저장된 레시피 상세 보기 모달 */}
+      <LLMRecipeModal
+        open={showSavedRecipeModal}
+        onOpenChange={setShowSavedRecipeModal}
+        initialContent={selectedRecipeContent}
+        initialTitle={selectedRecipeTitle}
+      />
     </div>
   );
 }

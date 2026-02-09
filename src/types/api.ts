@@ -135,6 +135,27 @@ export interface LLMRecipeResponse {
   recipe: string; // Markdown formatted recipe
 }
 
+export interface SaveRecipeRequest {
+  title: string;
+  content: string;
+  source: "ai_random" | "fridge_random" | "fridge_multi" | "part_specific";
+  used_meats?: string | null; // JSON 문자열
+}
+
+export interface SavedRecipeResponse {
+  id: number;
+  title: string;
+  content: string;
+  source: string;
+  used_meats: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecipeListResponse {
+  recipes: SavedRecipeResponse[];
+}
+
 export interface MeatInfoByPartNameResponse {
   partName: string;
   calories: number | null;

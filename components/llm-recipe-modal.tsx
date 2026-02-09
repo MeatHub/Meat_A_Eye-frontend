@@ -13,14 +13,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { generateRecipeWithLLM, getFridgeItems } from "@/lib/api";
+import { generateRecipeWithLLM, getFridgeItems, generateRandomRecipeAny, generateRandomRecipeFromFridge, saveRecipe } from "@/lib/api";
 import type { FridgeItemResponse } from "@/src/types/api";
 import ReactMarkdown from "react-markdown";
-import { Calendar, Package } from "lucide-react";
+import { Calendar, Package, Save } from "lucide-react";
+import { toast } from "@/components/ui/use-toast";
 
 interface LLMRecipeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  source?: "ai_random" | "fridge_random" | "fridge_multi" | "part_specific";
+  initialContent?: string; // 저장된 레시피를 표시할 때 사용
+  initialTitle?: string; // 저장된 레시피 제목
+  onRecipeSaved?: () => void; // 레시피 저장 완료 시 호출되는 콜백
 }
 
 // 재료 섹션을 정리하는 함수 - 줄 단위로 처리하여 카테고리별로 분리
@@ -142,51 +147,117 @@ function formatErrorMessage(err: any): string {
   return messageStr;
 }
 
-export function LLMRecipeModal({ open, onOpenChange }: LLMRecipeModalProps) {
+export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", initialContent, initialTitle, onRecipeSaved }: LLMRecipeModalProps) {
   const [loading, setLoading] = useState(false);
   const [recipeMarkdown, setRecipeMarkdown] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [fridgeItems, setFridgeItems] = useState<FridgeItemResponse[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [recipeTitle, setRecipeTitle] = useState<string>("");
+  const [usedMeats, setUsedMeats] = useState<string[]>([]);
+
+  // 레시피에서 제목 추출
+  const extractRecipeTitle = (markdown: string): string => {
+    const titleMatch = markdown.match(/^#\s+(.+)$/m);
+    return titleMatch ? titleMatch[1].trim() : "레시피";
+  };
+
+  // 레시피에서 사용된 고기 추출
+  const extractUsedMeats = (markdown: string, fridgeItems: FridgeItemResponse[]): string[] => {
+    const meats: string[] = [];
+    if (source === "fridge_multi" || source === "fridge_random") {
+      fridgeItems.forEach((item) => {
+        if (item.name) meats.push(item.name);
+      });
+    } else if (source === "ai_random") {
+      // 마크다운에서 고기 부위 추출 시도
+      const meatMatch = markdown.match(/주재료:\s*([가-힣\s]+)/);
+      if (meatMatch) {
+        meats.push(meatMatch[1].trim());
+      }
+    }
+    return meats;
+  };
 
   const generateRecipes = useCallback(async () => {
     setLoading(true);
     setError(null);
     setRecipeMarkdown("");
     setFridgeItems([]);
+    setRecipeTitle("");
+    setUsedMeats([]);
 
     try {
-      // 냉장고 아이템 조회
-      const fridgeResponse = await getFridgeItems();
-      const storedItems = fridgeResponse.items.filter(
-        (item) => item.status === "stored",
-      );
-      setFridgeItems(storedItems);
+      let recipe: string;
+      let storedItems: FridgeItemResponse[] = [];
 
-      if (storedItems.length === 0) {
-        setError("냉장고에 고기가 없습니다. 먼저 고기를 추가해주세요!");
-        setLoading(false);
-        return;
+      if (source === "ai_random") {
+        // 아무 고기로 랜덤 레시피 생성
+        recipe = await generateRandomRecipeAny();
+      } else if (source === "fridge_random") {
+        // 냉장고에서 랜덤 1부위
+        const fridgeResponse = await getFridgeItems();
+        storedItems = fridgeResponse.items.filter((item) => item.status === "stored");
+        if (storedItems.length === 0) {
+          setError("냉장고에 고기가 없습니다. 먼저 고기를 추가해주세요!");
+          setLoading(false);
+          return;
+        }
+        // generateRandomRecipeFromFridge는 백엔드에서 냉장고를 조회하므로 빈 배열 전송
+        recipe = await generateRandomRecipeFromFridge();
+        setFridgeItems(storedItems);
+      } else {
+        // fridge_multi: 냉장고 여러 고기로 생성
+        const fridgeResponse = await getFridgeItems();
+        storedItems = fridgeResponse.items.filter((item) => item.status === "stored");
+        if (storedItems.length === 0) {
+          setError("냉장고에 고기가 없습니다. 먼저 고기를 추가해주세요!");
+          setLoading(false);
+          return;
+        }
+        setFridgeItems(storedItems);
+        recipe = await generateRecipeWithLLM([]);
       }
-
-      // 백엔드가 냉장고 아이템을 조회하므로 빈 배열만 전송
-      const recipe = await generateRecipeWithLLM([]);
 
       // 재료 섹션 전처리
       const processedRecipe = preprocessIngredientsSection(recipe);
       setRecipeMarkdown(processedRecipe);
+      
+      // 제목과 사용된 고기 추출
+      const title = extractRecipeTitle(processedRecipe);
+      setRecipeTitle(title);
+      const meats = extractUsedMeats(processedRecipe, storedItems);
+      setUsedMeats(meats);
     } catch (err: any) {
       console.error("Failed to generate recipes:", err);
       setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [source]);
 
   useEffect(() => {
     if (open) {
-      generateRecipes();
+      if (initialContent) {
+        // 저장된 레시피를 표시하는 경우
+        const processedRecipe = preprocessIngredientsSection(initialContent);
+        setRecipeMarkdown(processedRecipe);
+        setRecipeTitle(initialTitle || extractRecipeTitle(processedRecipe));
+        setLoading(false);
+        setError(null);
+      } else {
+        // 새 레시피 생성
+        generateRecipes();
+      }
+    } else {
+      // 모달 닫힐 때 상태 초기화
+      setRecipeMarkdown("");
+      setRecipeTitle("");
+      setError(null);
+      setFridgeItems([]);
+      setUsedMeats([]);
     }
-  }, [open, generateRecipes]);
+  }, [open, generateRecipes, initialContent, initialTitle]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -431,20 +502,92 @@ export function LLMRecipeModal({ open, onOpenChange }: LLMRecipeModalProps) {
                   </CardContent>
                 </Card>
 
-                {/* Regenerate Button */}
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Button
-                    onClick={generateRecipes}
-                    variant="outline"
-                    className="w-full border-primary text-primary hover:bg-primary/10"
+                {/* Action Buttons */}
+                {initialContent ? (
+                  // 저장된 레시피를 표시하는 경우 - 닫기 버튼만 표시
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                   >
-                    <Wand2 className="w-4 h-4 mr-2" />
-                    다른 레시피 추천받기
-                  </Button>
-                </motion.div>
+                    <Button
+                      onClick={() => onOpenChange(false)}
+                      className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      닫기
+                    </Button>
+                  </motion.div>
+                ) : (
+                  // 새 레시피 생성하는 경우 - 저장 및 재생성 버튼 표시
+                  <div className="flex gap-3">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex-1"
+                    >
+                      <Button
+                        onClick={async () => {
+                          if (!recipeMarkdown || !recipeTitle) return;
+                          setSaving(true);
+                          try {
+                            await saveRecipe({
+                              title: recipeTitle,
+                              content: recipeMarkdown,
+                              source: source || "fridge_multi",
+                              used_meats: usedMeats.length > 0 ? JSON.stringify(usedMeats) : null,
+                            });
+                            toast({
+                              title: "레시피가 저장되었습니다! 📝",
+                              description: "레시피 탐색에서 저장된 레시피를 확인할 수 있습니다.",
+                            });
+                            // 레시피 목록 업데이트 콜백 호출
+                            if (onRecipeSaved) {
+                              onRecipeSaved();
+                            }
+                            // 저장 완료 후 모달 닫기
+                            onOpenChange(false);
+                          } catch (err: any) {
+                            console.error("Failed to save recipe:", err);
+                            toast({
+                              title: "레시피 저장 실패",
+                              description: err.message || "다시 시도해주세요.",
+                              variant: "destructive",
+                            });
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                        disabled={saving || !recipeMarkdown}
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                      >
+                        {saving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            저장 중...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4 mr-2" />
+                            레시피 저장
+                          </>
+                        )}
+                      </Button>
+                    </motion.div>
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="flex-1"
+                    >
+                      <Button
+                        onClick={generateRecipes}
+                        variant="outline"
+                        className="w-full border-primary text-primary hover:bg-primary/10"
+                      >
+                        <Wand2 className="w-4 h-4 mr-2" />
+                        다른 레시피 추천받기
+                      </Button>
+                    </motion.div>
+                  </div>
+                )}
               </motion.div>
             ) : null}
           </AnimatePresence>

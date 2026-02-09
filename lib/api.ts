@@ -438,10 +438,55 @@ export const getNutritionInfo = async (
   return await apiCall(url);
 };
 
-// Recipe APIs (Backend) - 실제 API 구현 시 활성화
+// Recipe APIs (Backend) - 저장된 레시피 조회
 export const getRecipes = async (meatType?: string): Promise<Recipe[]> => {
-  // TODO: 실제 레시피 API 구현
-  return [];
+  try {
+    const response = await getSavedRecipes();
+    // SavedRecipeResponse를 Recipe 타입으로 변환
+    return response.recipes.map((r) => {
+      // 마크다운에서 제목 추출
+      const titleMatch = r.content.match(/^#\s+(.+)$/m);
+      const title = titleMatch ? titleMatch[1] : r.title;
+      
+      // 마크다운에서 고기 타입 추출 시도
+      let meatTypeFromContent = "전체";
+      if (r.used_meats) {
+        try {
+          const meats = JSON.parse(r.used_meats);
+          if (Array.isArray(meats) && meats.length > 0) {
+            const firstMeat = meats[0];
+            if (typeof firstMeat === "string") {
+              if (firstMeat.includes("소") || firstMeat.includes("한우")) {
+                meatTypeFromContent = "소고기";
+              } else if (firstMeat.includes("돼지")) {
+                meatTypeFromContent = "돼지고기";
+              }
+            }
+          }
+        } catch {
+          // JSON 파싱 실패 시 무시
+        }
+      }
+      
+      // 필터링
+      if (meatType && meatType !== "전체" && meatTypeFromContent !== meatType) {
+        return null;
+      }
+      
+      return {
+        id: String(r.id),
+        name: title,
+        meatType: meatTypeFromContent,
+        cookingTime: 30, // 기본값
+        difficulty: "중급" as const,
+        ingredients: [],
+        instructions: [],
+      };
+    }).filter((r): r is Recipe => r !== null);
+  } catch (error) {
+    console.error("Failed to load saved recipes:", error);
+    return [];
+  }
 };
 
 export const getRecipeById = async (id: string): Promise<Recipe | null> => {
@@ -477,6 +522,40 @@ export const generateRandomRecipeFromFridge = async (): Promise<string> => {
     body: {},
   });
   return response.recipe;
+};
+
+/** 아무 고기로 랜덤 레시피 생성 (로그인 필요) */
+export const generateRandomRecipeAny = async (): Promise<string> => {
+  const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe-random-any", {
+    method: "POST",
+    body: {},
+  });
+  return response.recipe;
+};
+
+// Saved Recipe APIs
+import type { SaveRecipeRequest, SavedRecipeResponse, RecipeListResponse } from "@/src/types/api";
+
+/** 레시피 저장 */
+export const saveRecipe = async (recipe: SaveRecipeRequest): Promise<SavedRecipeResponse> => {
+  return await apiCall<SavedRecipeResponse>("/api/v1/ai/recipe/save", {
+    method: "POST",
+    body: recipe,
+  });
+};
+
+/** 저장된 레시피 목록 조회 */
+export const getSavedRecipes = async (): Promise<RecipeListResponse> => {
+  return await apiCall<RecipeListResponse>("/api/v1/ai/recipe/saved", {
+    method: "GET",
+  });
+};
+
+/** 저장된 레시피 삭제 */
+export const deleteSavedRecipe = async (recipeId: number): Promise<{ success: boolean; message: string }> => {
+  return await apiCall<{ success: boolean; message: string }>(`/api/v1/ai/recipe/saved/${recipeId}`, {
+    method: "DELETE",
+  });
 };
 
 // 묶음번호 여부 (A + 19~29자리 숫자, 백엔드 로직과 일치)
