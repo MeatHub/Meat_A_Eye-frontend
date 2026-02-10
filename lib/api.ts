@@ -371,6 +371,7 @@ export const getMeatInfoList = async (
   Array<{
     id: number;
     name: string;
+    displayName?: string | null;
     category: string;
     calories: number | null;
     protein: number | null;
@@ -386,6 +387,7 @@ export const getMeatInfoList = async (
     Array<{
       id: number;
       name: string;
+      displayName?: string | null;
       category: string;
       calories: number | null;
       protein: number | null;

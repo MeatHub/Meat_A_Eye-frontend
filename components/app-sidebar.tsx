@@ -38,6 +38,33 @@ const meatFacts = [
   "닭가슴살 100g에는 약 31g의 단백질이 들어있습니다.",
 ];
 
+// 17부위 영문 → 한글 표시 (최근 분석 결과 등)
+const PART_DISPLAY_NAMES: Record<string, string> = {
+  Beef_Tenderloin: "소/안심",
+  Beef_Ribeye: "소/등심",
+  Beef_Sirloin: "소/채끝",
+  Beef_Chuck: "소/목심",
+  Beef_Round: "소/우둔",
+  Beef_BottomRound: "소/설도",
+  Beef_Brisket: "소/양지",
+  Beef_Shank: "소/사태",
+  Beef_Rib: "소/갈비",
+  Beef_Shoulder: "소/앞다리",
+  Pork_Tenderloin: "돼지/안심",
+  Pork_Loin: "돼지/등심",
+  Pork_Neck: "돼지/목심",
+  Pork_PicnicShoulder: "돼지/앞다리",
+  Pork_Ham: "돼지/뒷다리",
+  Pork_Belly: "돼지/삼겹살",
+  Pork_Ribs: "돼지/갈비",
+  Import_Beef_Rib_AU: "수입 소고기/갈비(호주)",
+  Import_Beef_Ribeye_AU: "수입 소고기/갈비살(호주)",
+  Import_Pork_Belly: "수입 돼지고기/삼겹살",
+};
+function getPartDisplayName(name: string): string {
+  return PART_DISPLAY_NAMES[name] ?? name;
+}
+
 // 최근 분석 결과 컴포넌트
 function RecentAnalysisResults({ onNavigate }: { onNavigate: (menu: string) => void }) {
   const [recentItems, setRecentItems] = useState<FridgeItemResponse[]>([]);
@@ -114,7 +141,7 @@ function RecentAnalysisResults({ onNavigate }: { onNavigate: (menu: string) => v
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-semibold text-foreground truncate flex-1">
-                  {item.name}
+                  {getPartDisplayName(item.name)}
                 </span>
                 <Badge
                   variant="outline"

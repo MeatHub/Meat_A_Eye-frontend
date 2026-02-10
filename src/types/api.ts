@@ -71,7 +71,7 @@ export interface PriceInfo {
   priceUnit: string;
   priceTrend: "up" | "down" | "flat";
   priceDate: string | null;
-  priceSource: "api" | "cache" | "fallback";
+  priceSource: "api" | "cache" | "fallback" | "unavailable";
   gradePrices?: GradePrice[];
 }
 
@@ -158,6 +158,7 @@ export interface RecipeListResponse {
 
 export interface MeatInfoByPartNameResponse {
   partName: string;
+  displayName?: string | null;
   calories: number | null;
   protein: number | null;
   fat: number | null;
@@ -166,7 +167,7 @@ export interface MeatInfoByPartNameResponse {
   priceUnit: string;
   priceTrend: "up" | "down" | "flat";
   priceDate: string | null;
-  priceSource: "api" | "cache" | "fallback";
+  priceSource: "api" | "cache" | "fallback" | "unavailable";
   nutritionSource?: "api" | "cache" | "fallback" | "timeout" | "error";
   gradePrices?: GradePrice[];
   storageGuide: string | null;

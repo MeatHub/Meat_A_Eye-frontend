@@ -65,6 +65,7 @@ export function FridgeView() {
     Array<{
       id: number;
       name: string;
+      displayName?: string | null;
       category: string;
       calories: number | null;
       protein: number | null;
@@ -762,7 +763,8 @@ export function FridgeView() {
                                             key={meat.id}
                                             value={meat.id.toString()}
                                           >
-                                            {meat.name} (
+                                            {(meat.displayName || meat.name)}{" "}
+                                            (
                                             {meat.category === "beef"
                                               ? "소"
                                               : "돼지"}
@@ -781,12 +783,20 @@ export function FridgeView() {
                             ) : (
                               <>
                                 <CardTitle className="text-lg text-foreground">
-                                  {item.meatInfoId &&
-                                  item.meatInfoId > 0 &&
-                                  item.name &&
-                                  item.name !== "알 수 없음"
-                                    ? item.name
-                                    : "부위 선택"}
+                                  {item.meatInfoId && item.meatInfoId > 0
+                                    ? (() => {
+                                        const meat = meatInfoList.find(
+                                          (m) => m.id === item.meatInfoId
+                                        );
+                                        return meat
+                                          ? meat.displayName || meat.name
+                                          : item.name && item.name !== "알 수 없음"
+                                            ? item.name
+                                            : "부위 선택";
+                                      })()
+                                    : item.name && item.name !== "알 수 없음"
+                                      ? item.name
+                                      : "부위 선택"}
                                 </CardTitle>
                                 {item.grade && (
                                   <Badge

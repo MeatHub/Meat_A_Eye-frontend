@@ -60,6 +60,36 @@ import type {
   TraceabilityInfo,
 } from "@/src/types/api";
 
+// 17부위 영문 클래스명 → UI 한글 표시 (백엔드 displayName 로드 전 폴백)
+const PART_DISPLAY_NAMES: Record<string, string> = {
+  Beef_Tenderloin: "소/안심",
+  Beef_Ribeye: "소/등심",
+  Beef_Sirloin: "소/채끝",
+  Beef_Chuck: "소/목심",
+  Beef_Round: "소/우둔",
+  Beef_BottomRound: "소/설도",
+  Beef_Brisket: "소/양지",
+  Beef_Shank: "소/사태",
+  Beef_Rib: "소/갈비",
+  Beef_Shoulder: "소/앞다리",
+  Pork_Tenderloin: "돼지/안심",
+  Pork_Loin: "돼지/등심",
+  Pork_Neck: "돼지/목심",
+  Pork_PicnicShoulder: "돼지/앞다리",
+  Pork_Ham: "돼지/뒷다리",
+  Pork_Belly: "돼지/삼겹살",
+  Pork_Ribs: "돼지/갈비",
+};
+
+function getPartDisplayName(
+  partName: string | undefined | null,
+  fromMeatInfo?: string | null
+): string {
+  if (fromMeatInfo) return fromMeatInfo;
+  if (partName && PART_DISPLAY_NAMES[partName]) return PART_DISPLAY_NAMES[partName];
+  return partName || "알 수 없음";
+}
+
 interface AnalysisViewProps {
   onSaveToFridge: () => void;
   onBack?: () => void;
@@ -958,7 +988,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
 
       await analyzeImage(file, mode, true); // auto_add_fridge = true
 
-      const successMsg = `${analysisResponse.partName}이(가) 냉장고에 저장되었습니다.`;
+      const successMsg = `${getPartDisplayName(analysisResponse.partName, meatInfo?.displayName)}이(가) 냉장고에 저장되었습니다.`;
       toast({
         title: "저장 완료",
         description: successMsg,
@@ -1335,7 +1365,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                           분석이 완료되었습니다!
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          {result.partName} 부위가 성공적으로 분석되었습니다.
+                          {getPartDisplayName(result.partName, meatInfo?.displayName)} 부위가 성공적으로 분석되었습니다.
                         </p>
                       </div>
                     </div>
@@ -1410,7 +1440,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                         {/* 분석 결과 */}
                         <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
                           <h3 className="text-xl font-bold text-primary mb-2">
-                            {result.partName}
+                            {getPartDisplayName(result.partName, meatInfo?.displayName)}
                           </h3>
                           <div className="flex flex-wrap gap-2">
                             <Badge variant="outline">
@@ -1622,16 +1652,16 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                                     )}
                                   </>
                                 ) : (
-                                  <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
-                                    <div className="w-16 h-16 mb-3 rounded-full bg-muted/50 flex items-center justify-center">
-                                      <FileText className="w-8 h-8 text-muted-foreground" />
+                                  <div className="flex flex-col items-center justify-center py-8 px-4 text-center rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20">
+                                    <div className="w-14 h-14 mb-3 rounded-full bg-muted/60 flex items-center justify-center">
+                                      <FileText className="w-7 h-7 text-muted-foreground" />
                                     </div>
-                                    <p className="text-sm font-medium text-foreground mb-1">
+                                    <p className="text-sm font-semibold text-foreground mb-1">
                                       가격 정보 제공 불가
                                     </p>
-                                    <p className="text-xs text-muted-foreground">
-                                      이 부위에 대한 가격정보를 제공하지
-                                      않습니다.
+                                    <p className="text-xs text-muted-foreground max-w-[220px]">
+                                      이 부위는 시세 API에 등록되지 않아
+                                      가격정보를 제공하지 않습니다.
                                     </p>
                                   </div>
                                 )}
@@ -1744,7 +1774,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
           <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
             <DialogTitle className="flex items-center gap-2 text-xl text-primary">
               <ChefHat className="w-5 h-5" />
-              {result?.partName} 레시피 추천
+              {getPartDisplayName(result?.partName ?? undefined, meatInfo?.displayName)} 레시피 추천
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-hidden px-6">

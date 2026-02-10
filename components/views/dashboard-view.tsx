@@ -45,7 +45,36 @@ import type {
   FridgeItemResponse,
   PriceItem,
   PriceHistoryPoint,
+  DashboardPricesResponse,
+  PriceHistoryResponse,
 } from "@/src/types/api";
+
+// 17부위 영문 → 한글 표시 (부위별 분포, 냉장고 현황)
+const PART_DISPLAY_NAMES: Record<string, string> = {
+  Beef_Tenderloin: "소/안심",
+  Beef_Ribeye: "소/등심",
+  Beef_Sirloin: "소/채끝",
+  Beef_Chuck: "소/목심",
+  Beef_Round: "소/우둔",
+  Beef_BottomRound: "소/설도",
+  Beef_Brisket: "소/양지",
+  Beef_Shank: "소/사태",
+  Beef_Rib: "소/갈비",
+  Beef_Shoulder: "소/앞다리",
+  Pork_Tenderloin: "돼지/안심",
+  Pork_Loin: "돼지/등심",
+  Pork_Neck: "돼지/목심",
+  Pork_PicnicShoulder: "돼지/앞다리",
+  Pork_Ham: "돼지/뒷다리",
+  Pork_Belly: "돼지/삼겹살",
+  Pork_Ribs: "돼지/갈비",
+  Import_Beef_Rib_AU: "수입 소고기/갈비(호주)",
+  Import_Beef_Ribeye_AU: "수입 소고기/갈비살(호주)",
+  Import_Pork_Belly: "수입 돼지고기/삼겹살",
+};
+function getPartDisplayName(partName: string): string {
+  return PART_DISPLAY_NAMES[partName] ?? partName;
+}
 
 interface DashboardViewProps {
   onNavigate: (menu: string) => void;
@@ -78,6 +107,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     // 초기 로드: 전체 평균으로 기본 부위들만 조회
     loadDashboardData();
   }, []);
+
+  // 가격·이력은 "조회" 버튼 클릭 시에만 재조회 (카테고리/등급 변경 시 자동 로딩 없음)
 
   // 부류 선택 핸들러: 부류 변경 시 품목과 등급 초기화
   const handleCategoryChange = (category: string) => {
@@ -136,11 +167,11 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     } else if (selectedCategory === "돼지") {
       return {
         beef: [],
-        pork: ["Pork_Shoulder", "Pork_Belly", "Pork_Rib", "Pork_Loin"], // 앞다리, 삼겹살, 갈비, 목심
+        pork: ["Pork_PicnicShoulder", "Pork_Belly", "Pork_Ribs", "Pork_Neck"], // 앞다리, 삼겹살, 갈비, 목심 (가격 제공 4부위)
       };
     } else if (selectedCategory === "수입 소고기") {
       return {
-        beef: ["Import_Beef_Rib_US", "Import_Beef_Rib_AU", "Import_Beef_Ribeye_US", "Import_Beef_Ribeye_AU"],
+        beef: ["Import_Beef_Rib_AU", "Import_Beef_Ribeye_AU"],
         pork: [],
       };
     } else if (selectedCategory === "수입 돼지고기") {
@@ -159,16 +190,16 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
       const fridgeResponse = await getFridgeItems();
       
       // "전체" 선택 시 카테고리별 기본 부위들을 개별적으로 조회
-      let pricesResponse = { beef: [], pork: [] };
-      let historyResponse = { beef: [], pork: [] };
+      let pricesResponse: DashboardPricesResponse = { beef: [], pork: [] };
+      let historyResponse: PriceHistoryResponse = { beef: [], pork: [] };
       
       if (partName === undefined) {
         // "전체" 선택 시: 카테고리별 기본 부위들을 개별적으로 조회
         const defaultParts = getDefaultPartsForCategory();
-        const allBeefParts: any[] = [];
-        const allPorkParts: any[] = [];
-        const allBeefHistory: any[] = [];
-        const allPorkHistory: any[] = [];
+        const allBeefParts: PriceItem[] = [];
+        const allPorkParts: PriceItem[] = [];
+        const allBeefHistory: PriceHistoryPoint[] = [];
+        const allPorkHistory: PriceHistoryPoint[] = [];
         
         // 소고기 기본 부위들 개별 조회
         for (const beefPart of defaultParts.beef) {
@@ -212,7 +243,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               ? partName
               : undefined,
             selectedGrade
-          ).catch(() => ({ beef: [], pork: [] })),
+          ).catch((): DashboardPricesResponse => ({ beef: [], pork: [] })),
           getDashboardPriceHistory(
             selectedRegion,
             partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
@@ -223,7 +254,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               : undefined,
             selectedGrade,
             6
-          ).catch(() => ({ beef: [], pork: [] })),
+          ).catch((): PriceHistoryResponse => ({ beef: [], pork: [] })),
         ]);
       }
       
@@ -426,7 +457,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   }, {} as Record<string, number>);
 
   const pieData = Object.entries(meatPartsData).map(([name, value]) => ({
-    name,
+    name: getPartDisplayName(name),
     value,
   }));
 
@@ -555,16 +586,14 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     ],
     돼지: [
       { value: "전체", label: "전체" },
-      { value: "Pork_Shoulder", label: "앞다리" },
+      { value: "Pork_PicnicShoulder", label: "앞다리" },
       { value: "Pork_Belly", label: "삼겹살" },
-      { value: "Pork_Rib", label: "갈비" },
-      { value: "Pork_Loin", label: "목심" },
+      { value: "Pork_Ribs", label: "갈비" },
+      { value: "Pork_Neck", label: "목심" },
     ],
     "수입 소고기": [
       { value: "전체", label: "전체" },
-      { value: "Import_Beef_Rib_US", label: "갈비 - 미국산" },
       { value: "Import_Beef_Rib_AU", label: "갈비 - 호주산" },
-      { value: "Import_Beef_Ribeye_US", label: "갈비살 - 미국산" },
       { value: "Import_Beef_Ribeye_AU", label: "갈비살 - 호주산" },
     ],
     "수입 돼지고기": [
@@ -585,7 +614,6 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     ],
     "수입 소고기": [
       { value: "00", label: "전체" },
-      { value: "81", label: "미국산" },
       { value: "82", label: "호주산" },
     ],
     "수입 돼지고기": [
@@ -1232,7 +1260,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                     >
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-bold text-base text-foreground">
-                          {item.name}
+                          {getPartDisplayName(item.name)}
                         </h4>
                         <Badge
                           variant="outline"
