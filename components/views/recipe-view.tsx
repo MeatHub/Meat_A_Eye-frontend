@@ -355,8 +355,8 @@ export function RecipeView() {
                   <Image
                     src={iconUrls[recipe.id]}
                     alt={recipe.name}
-                    width={140}
-                    height={140}
+                    width={180}
+                    height={180}
                     className="object-contain drop-shadow-lg"
                     unoptimized
                   />
@@ -465,6 +465,7 @@ export function RecipeView() {
         }}
         initialContent={selectedRecipeContent}
         initialTitle={selectedRecipeTitle}
+        initialIconUrl={selectedRecipeId ? iconUrls[selectedRecipeId] : undefined}
         savedRecipeId={
           selectedRecipeId ? parseInt(selectedRecipeId, 10) : undefined
         }

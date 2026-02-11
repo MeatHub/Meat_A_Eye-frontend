@@ -71,6 +71,7 @@ interface LLMRecipeModalProps {
   source?: "ai_random" | "fridge_random" | "fridge_multi" | "part_specific";
   initialContent?: string; // 저장된 레시피를 표시할 때 사용
   initialTitle?: string; // 저장된 레시피 제목
+  initialIconUrl?: string; // 카드에서 사용 중인 아이콘 URL
   onRecipeSaved?: () => void; // 레시피 저장 완료 시 호출되는 콜백
   savedRecipeId?: number; // 저장된 레시피 ID (삭제 시 사용)
   onRecipeDeleted?: () => void; // 레시피 삭제 완료 시 호출
@@ -201,6 +202,7 @@ export function LLMRecipeModal({
   source = "fridge_multi",
   initialContent,
   initialTitle,
+  initialIconUrl,
   onRecipeSaved,
   savedRecipeId,
   onRecipeDeleted,
@@ -320,11 +322,15 @@ export function LLMRecipeModal({
         setLoading(false);
         setError(null);
 
-        // 랜덤 아이콘
-        const cat = guessCategory(title);
-        getRandomIcon(cat)
-          .then(setRecipeIconUrl)
-          .catch(() => setRecipeIconUrl(null));
+        // 카드에서 전달받은 아이콘이 있으면 그대로 사용, 없으면 랜덤
+        if (initialIconUrl) {
+          setRecipeIconUrl(initialIconUrl);
+        } else {
+          const cat = guessCategory(title);
+          getRandomIcon(cat)
+            .then(setRecipeIconUrl)
+            .catch(() => setRecipeIconUrl(null));
+        }
       } else {
         // 새 레시피 생성
         generateRecipes();
