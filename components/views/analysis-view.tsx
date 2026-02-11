@@ -83,10 +83,11 @@ const PART_DISPLAY_NAMES: Record<string, string> = {
 
 function getPartDisplayName(
   partName: string | undefined | null,
-  fromMeatInfo?: string | null
+  fromMeatInfo?: string | null,
 ): string {
   if (fromMeatInfo) return fromMeatInfo;
-  if (partName && PART_DISPLAY_NAMES[partName]) return PART_DISPLAY_NAMES[partName];
+  if (partName && PART_DISPLAY_NAMES[partName])
+    return PART_DISPLAY_NAMES[partName];
   return partName || "알 수 없음";
 }
 
@@ -108,7 +109,7 @@ function TraceabilityDetailSections({
   if (!info) return null;
   const formatRange = (
     from: string | null | undefined,
-    to: string | null | undefined
+    to: string | null | undefined,
   ) => {
     if (from && to) return `${from} ~ ${to}`;
     return from || to || "";
@@ -275,7 +276,7 @@ function TraceabilityDetailSections({
                 <span>
                   {formatRange(
                     info.refrigDistbPdBeginDe,
-                    info.refrigDistbPdEndDe
+                    info.refrigDistbPdEndDe,
                   )}
                 </span>
               </>
@@ -312,16 +313,36 @@ function TraceabilityDetailSections({
 }
 
 // AI 분석 모드: 소 버전 | 돼지 버전 | OCR 버전
-const AI_MODE_OPTIONS: { value: AIAnalysisMode; label: string; icon: React.ReactNode; desc: string }[] = [
-  { value: "beef", label: "소 버전", icon: <Sparkles className="w-4 h-4" />, desc: "소고기 10부위 부위 판별" },
-  { value: "pork", label: "돼지 버전", icon: <Eye className="w-4 h-4" />, desc: "돼지고기 7부위 부위 판별" },
-  { value: "ocr", label: "OCR 버전", icon: <FileText className="w-4 h-4" />, desc: "이력번호·묶음번호 이미지 인식" },
+const AI_MODE_OPTIONS: {
+  value: AIAnalysisMode;
+  label: string;
+  icon: React.ReactNode;
+  desc: string;
+}[] = [
+  {
+    value: "beef",
+    label: "소 버전",
+    icon: <Sparkles className="w-4 h-4" />,
+    desc: "소고기 10부위 부위 판별",
+  },
+  {
+    value: "pork",
+    label: "돼지 버전",
+    icon: <Eye className="w-4 h-4" />,
+    desc: "돼지고기 7부위 부위 판별",
+  },
+  {
+    value: "ocr",
+    label: "OCR 버전",
+    icon: <FileText className="w-4 h-4" />,
+    desc: "이력번호·묶음번호 이미지 인식",
+  },
 ];
 
 export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   const [mode, setMode] = useState<AIAnalysisMode>("beef");
   const [inputMethod, setInputMethod] = useState<"file" | "camera" | null>(
-    null
+    null,
   );
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -329,7 +350,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   const [analysisResponse, setAnalysisResponse] =
     useState<AIAnalyzeResponse | null>(null);
   const [meatInfo, setMeatInfo] = useState<MeatInfoByPartNameResponse | null>(
-    null
+    null,
   );
   const [loadingMeatInfo, setLoadingMeatInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -355,13 +376,40 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   const traceabilitySectionRef = useRef<HTMLDivElement>(null);
 
   // OCR 실패 시 이력번호 조회 섹션 노출
-  const ocrFailed = mode === "ocr" && result !== null && !result.traceabilityNumber;
+  const ocrFailed =
+    mode === "ocr" && result !== null && !result.traceabilityNumber;
   useEffect(() => {
     if (ocrFailed) {
       setShowTraceabilitySection(true);
-      setTimeout(() => traceabilitySectionRef.current?.scrollIntoView({ behavior: "smooth" }), 300);
+      setTimeout(
+        () =>
+          traceabilitySectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+          }),
+        300,
+      );
     }
   }, [ocrFailed]);
+
+  // OCR 성공 시 수입산 이력번호는 자동 조회 실행
+  const [autoLookupDone, setAutoLookupDone] = useState(false);
+  useEffect(() => {
+    if (
+      mode === "ocr" &&
+      result?.traceabilityNumber &&
+      !autoLookupDone &&
+      !manualTraceLoading
+    ) {
+      const num = result.traceabilityNumber.trim();
+      // 수입 묶음번호(A+숫자) 또는 12자리 숫자 이력번호 → 자동 조회
+      const isImport = isBundleNumber(num);
+      const is12Digit = /^\d{12}$/.test(num);
+      if (isImport || is12Digit) {
+        setAutoLookupDone(true);
+        handleTraceabilityLookup(num);
+      }
+    }
+  }, [result?.traceabilityNumber, mode, autoLookupDone]);
 
   // Camera refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -374,7 +422,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     if (typeof window === "undefined") return false;
     const userAgent = navigator.userAgent.toLowerCase();
     return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
-      userAgent
+      userAgent,
     );
   };
 
@@ -431,7 +479,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       }
 
       setError(
-        `이 ${browserName} 버전은 카메라를 지원하지 않습니다. 최신 버전으로 업데이트하거나 Chrome, Edge, Firefox를 사용해주세요.`
+        `이 ${browserName} 버전은 카메라를 지원하지 않습니다. 최신 버전으로 업데이트하거나 Chrome, Edge, Firefox를 사용해주세요.`,
       );
       return;
     }
@@ -468,7 +516,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
         // 제약 조건 실패 시 기본 카메라로 재시도
         console.warn(
           "고해상도 카메라 접근 실패, 기본 설정으로 재시도:",
-          constraintError
+          constraintError,
         );
         try {
           if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -484,7 +532,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                   navigator,
                   { video: true },
                   resolve,
-                  reject
+                  reject,
                 );
               });
             } else {
@@ -599,7 +647,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   };
 
   const handleFileSelect = async (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -628,7 +676,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
 
   // 모바일 네이티브 카메라 핸들러
   const handleMobileCameraSelect = async (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -699,12 +747,12 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       const preprocessed = await preprocessImage(file);
 
       console.log(
-        `Image preprocessed: ${preprocessed.originalSize} → ${preprocessed.compressedSize} bytes`
+        `Image preprocessed: ${preprocessed.originalSize} → ${preprocessed.compressedSize} bytes`,
       );
 
       // Convert preprocessed dataUrl back to File for multipart upload
       const preprocessedBlob = await fetch(preprocessed.dataUrl).then((r) =>
-        r.blob()
+        r.blob(),
       );
       const preprocessedFile = new File([preprocessedBlob], "image.jpg", {
         type: "image/jpeg",
@@ -712,7 +760,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
 
       // Send to backend API with multipart form data (FormData로 전송)
       console.log(
-        `[API REQUEST] POST /api/analyze - mode: ${mode}, file size: ${preprocessedFile.size} bytes, resolution: ${preprocessed.width}x${preprocessed.height}`
+        `[API REQUEST] POST /api/analyze - mode: ${mode}, file size: ${preprocessedFile.size} bytes, resolution: ${preprocessed.width}x${preprocessed.height}`,
       );
       const analysisResult = await analyzeImage(preprocessedFile, mode, false); // Don't auto-add to fridge (소/돼지/OCR 3모드)
       console.log(`[API RESPONSE SUCCESS] 분석 결과:`, analysisResult);
@@ -756,7 +804,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     } catch (err: any) {
       console.error(
         "[API RESPONSE ERROR]: ",
-        err.response?.data || err.message
+        err.response?.data || err.message,
       );
       const errorMsg = err.message || "분석에 실패했습니다. 다시 시도해주세요.";
       setError(errorMsg);
@@ -799,7 +847,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     // L로 시작하는 묶음번호는 국산으로 바로 처리
     if (isDomesticBundle) {
       const mtraceUrl = `https://www.mtrace.go.kr/search.do?mtraceNo=${encodeURIComponent(
-        num
+        num,
       )}`;
       window.open(mtraceUrl, "_blank");
       toast({
@@ -875,7 +923,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
           errorDetail.includes("이력제 API 연결 실패"))
       ) {
         const mtraceUrl = `https://www.mtrace.go.kr/search.do?mtraceNo=${encodeURIComponent(
-          num
+          num,
         )}`;
         window.open(mtraceUrl, "_blank");
         toast({
@@ -898,15 +946,16 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   };
 
   const handleSaveTraceabilityToFridge = async (
-    traceInfo: TraceabilityInfo | null
+    traceInfo: TraceabilityInfo | null,
   ) => {
     if (!traceInfo) return;
-    
+
     // 게스트 모드 체크
     if (getIsGuest() || !getAuthToken()) {
       toast({
         title: "로그인 필요",
-        description: "냉장고 저장은 로그인 후 이용할 수 있습니다. 게스트 모드에서는 냉장고 기능을 사용할 수 없습니다.",
+        description:
+          "냉장고 저장은 로그인 후 이용할 수 있습니다. 게스트 모드에서는 냉장고 기능을 사용할 수 없습니다.",
         variant: "destructive",
       });
       return;
@@ -990,7 +1039,8 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     if (getIsGuest() || !getAuthToken()) {
       toast({
         title: "로그인 필요",
-        description: "냉장고 저장은 로그인 후 이용할 수 있습니다. 게스트 모드에서는 냉장고 기능을 사용할 수 없습니다.",
+        description:
+          "냉장고 저장은 로그인 후 이용할 수 있습니다. 게스트 모드에서는 냉장고 기능을 사용할 수 없습니다.",
         variant: "destructive",
       });
       return;
@@ -1067,6 +1117,12 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     setAnalysisResponse(null);
     setError(null);
     setInputMethod(null);
+    setAutoLookupDone(false);
+    setManualTraceability(null);
+    setManualTraceabilityList(null);
+    setSelectedTraceDetail(null);
+    setManualTraceError(null);
+    setTraceInput("");
     stopCamera();
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -1078,7 +1134,9 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       {/* Header with Back Button */}
       <div className="flex items-center gap-3">
         {onBack && <BackButton onClick={onBack} />}
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground">고기 분석</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground">
+          고기 분석
+        </h2>
       </div>
 
       {/* AI 분석 모드 선택: 소 버전 | 돼지 버전 | OCR 버전 — 모바일 최적화 */}
@@ -1100,7 +1158,12 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
               <button
                 key={opt.value}
                 type="button"
-                onClick={() => setMode(opt.value)}
+                onClick={() => {
+                  if (mode !== opt.value) {
+                    reset();
+                    setMode(opt.value);
+                  }
+                }}
                 className={`
                   flex flex-col items-center gap-3 min-h-[100px] sm:min-h-[110px] p-5 rounded-2xl border-2 transition-all duration-200
                   active:scale-[0.98] touch-manipulation
@@ -1118,7 +1181,9 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                 >
                   {opt.icon}
                 </div>
-                <span className="font-bold text-sm sm:text-base">{opt.label}</span>
+                <span className="font-bold text-sm sm:text-base">
+                  {opt.label}
+                </span>
                 <span className="text-[11px] sm:text-xs text-muted-foreground text-center leading-tight">
                   {opt.desc}
                 </span>
@@ -1126,20 +1191,28 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
             ))}
           </div>
           <div className="mt-4 flex items-center justify-end">
-            <Badge variant="outline" className="gap-1.5 px-3 py-1 text-xs font-medium">
-              AI {mode === "beef" ? "소 10부위" : mode === "pork" ? "돼지 7부위" : "OCR"}
+            <Badge
+              variant="outline"
+              className="gap-1.5 px-3 py-1 text-xs font-medium"
+            >
+              AI{" "}
+              {mode === "beef"
+                ? "소 10부위"
+                : mode === "pork"
+                  ? "돼지 7부위"
+                  : "OCR"}
             </Badge>
           </div>
         </CardContent>
       </Card>
 
-      {/* OCR 모드에서만: 이력번호 직접 입력 링크 (상단에는 조회 카드 없음) */}
+      {/* OCR 모드에서만: 이력번호 직접 입력 링크 — 오른쪽 하단 */}
       {mode === "ocr" && !showTraceabilitySection && (
-        <div className="flex justify-center">
+        <div className="flex justify-end px-2">
           <button
             type="button"
             onClick={() => setShowTraceabilitySection(true)}
-            className="text-sm text-primary hover:underline font-medium flex items-center gap-1.5"
+            className="text-sm text-primary hover:text-primary/80 hover:underline font-semibold flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all shadow-sm"
           >
             <FileText className="w-4 h-4" />
             이력번호 직접 입력하여 조회
@@ -1326,7 +1399,11 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                             )
                           ) : (
                             <>
-                              {getPartDisplayName(result.partName, meatInfo?.displayName)} 부위가 성공적으로 분석되었습니다.
+                              {getPartDisplayName(
+                                result.partName,
+                                meatInfo?.displayName,
+                              )}{" "}
+                              부위가 성공적으로 분석되었습니다.
                             </>
                           )}
                         </p>
@@ -1334,380 +1411,465 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                     </div>
                   </motion.div>
                 )}
-                
+
                 {/* Analysis Result - 반응형 레이아웃 (OCR 모드는 이력 조회 영역으로 연결) */}
                 {result && mode === "ocr" ? (
-                  <div className="space-y-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
-                    <h4 className="text-sm font-semibold text-primary">OCR 인식 결과</h4>
-                    {result.traceabilityNumber ? (
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <Input
-                          value={result.traceabilityNumber}
-                          readOnly
-                          className="font-mono"
-                        />
-                        <Button
-                          onClick={() =>
-                            handleTraceabilityLookup(result.traceabilityNumber || "")
+                  <div className="space-y-4">
+                    <div className="space-y-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
+                      <h4 className="text-sm font-semibold text-primary">
+                        OCR 인식 결과
+                      </h4>
+                      {result.traceabilityNumber ? (
+                        <div className="space-y-3">
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <Input
+                              value={result.traceabilityNumber}
+                              readOnly
+                              className="font-mono"
+                            />
+                            <Button
+                              onClick={() => {
+                                handleTraceabilityLookup(
+                                  result.traceabilityNumber || "",
+                                );
+                              }}
+                              disabled={manualTraceLoading}
+                              className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                            >
+                              {manualTraceLoading ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                  조회 중...
+                                </>
+                              ) : (
+                                "이력번호로 조회하기"
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          이미지에서 이력번호를 찾지 못했습니다. 이력번호가
+                          선명하게 보이도록 다시 촬영해 주세요.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* OCR 조회 결과 — 수입산 결과 인라인 표시 */}
+                    {manualTraceability && !manualTraceabilityList?.length && (
+                      <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
+                        <h4 className="text-sm font-semibold text-primary">
+                          이력 정보 (냉장고 연동용)
+                        </h4>
+                        <TraceabilityDetailSections
+                          info={manualTraceability}
+                          onSaveToFridge={() =>
+                            handleSaveTraceabilityToFridge(manualTraceability)
                           }
-                          variant="secondary"
-                          className="shrink-0"
-                        >
-                          이력번호로 조회하기
-                        </Button>
+                          saving={savingFromTraceability}
+                        />
                       </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        이미지에서 이력번호를 찾지 못했습니다. 이력번호가 선명하게 보이도록 다시 촬영해 주세요.
+                    )}
+                    {manualTraceabilityList &&
+                      manualTraceabilityList.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-semibold text-primary">
+                            묶음 이력 목록 ({manualTraceabilityList.length}건) —
+                            클릭 시 상세
+                          </h4>
+                          <ul className="space-y-2 max-h-48 overflow-y-auto">
+                            {manualTraceabilityList.map((item, idx) => (
+                              <li key={item.historyNo ?? idx}>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleTraceItemClick(item.historyNo)
+                                  }
+                                  disabled={detailLoading}
+                                  className="w-full text-left p-3 rounded-lg border border-border hover:bg-primary/10 hover:border-primary/30 transition-colors disabled:opacity-50"
+                                >
+                                  <span className="font-mono text-xs text-muted-foreground">
+                                    {item.historyNo || "(이력번호 없음)"}
+                                  </span>
+                                  {(item.origin ||
+                                    item.partName ||
+                                    item.slaughterDate) && (
+                                    <span className="ml-2 text-sm">
+                                      {[
+                                        item.origin,
+                                        item.partName,
+                                        item.slaughterDate,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </span>
+                                  )}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                          {detailLoading && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              상세 정보 조회 중...
+                            </p>
+                          )}
+                          {selectedTraceDetail && (
+                            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
+                              <h4 className="text-sm font-semibold text-primary">
+                                선택 이력 상세 (냉장고 연동용)
+                              </h4>
+                              <TraceabilityDetailSections
+                                info={selectedTraceDetail}
+                                onSaveToFridge={() =>
+                                  handleSaveTraceabilityToFridge(
+                                    selectedTraceDetail,
+                                  )
+                                }
+                                saving={savingFromTraceability}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    {manualTraceError && (
+                      <p className="text-sm text-destructive p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                        {manualTraceError}
                       </p>
                     )}
+
+                    {/* 다시 분석하기 버튼 (OCR) */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="pt-2"
+                    >
+                      <Button
+                        onClick={reset}
+                        variant="outline"
+                        className="w-full min-h-[52px] border-2 border-primary/40 text-primary hover:bg-primary/10 font-bold text-base rounded-xl gap-2"
+                      >
+                        <Camera className="w-5 h-5" />
+                        다시 분석하기 (OCR)
+                      </Button>
+                    </motion.div>
                   </div>
                 ) : result ? (
-                  <div className="flex flex-col lg:flex-row gap-6">
-                    {/* 왼쪽: 이미지 (작게) */}
-                    <div className="flex-shrink-0 lg:w-80 xl:w-96">
-                      <div className="space-y-3 sticky top-4">
-                        <div className="relative rounded-lg overflow-hidden border border-border bg-muted/30 shadow-sm">
+                  <div className="space-y-5">
+                    {/* 상단: 이미지 + 분석 결과 요약 */}
+                    <div className="flex flex-col sm:flex-row gap-5">
+                      {/* 이미지 */}
+                      <div className="flex-shrink-0 sm:w-56 md:w-64">
+                        <div className="relative rounded-2xl overflow-hidden border border-border/50 bg-muted/20 shadow-sm aspect-square">
                           <img
                             src={selectedImage}
                             alt="Selected"
-                            className="w-full h-auto object-contain max-h-[400px] lg:max-h-[500px]"
+                            className="w-full h-full object-cover"
                           />
-                          {result?.gradCAM && (
-                            <img
-                              src={result.gradCAM}
-                              alt="Grad-CAM 히트맵"
-                              className="absolute inset-0 w-full h-full object-cover opacity-50 mix-blend-multiply pointer-events-none"
-                            />
-                          )}
                         </div>
-                        {/* 히트맵 단독 표시 */}
-                        {result?.gradCAM && (
-                          <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                            <p className="text-xs font-medium text-muted-foreground mb-2">
-                              모델이 집중한 영역 (Grad-CAM)
-                            </p>
-                            <img
-                              src={result.gradCAM}
-                              alt="Grad-CAM 히트맵"
-                              className="w-full rounded-lg"
-                            />
-                          </div>
-                        )}
                       </div>
-                    </div>
 
-                    {/* 오른쪽: 분석 정보 */}
-                    <div className="flex-1 min-w-0 space-y-4">
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-4"
-                      >
-                        {/* 신뢰도 20% 미만 경고 */}
-                        {result.confidence < 0.2 && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="p-4 rounded-lg bg-red-50 border-2 border-red-300 text-red-800"
-                          >
-                            <div className="flex items-start gap-3">
-                              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                              <div>
-                                <h4 className="font-semibold text-red-900 mb-1">
-                                  인식 신뢰도가 낮습니다
-                                </h4>
-                                <p className="text-sm text-red-700">
-                                  사진을 더 명확하게 찍어주세요. 조명이 충분하고
-                                  고기 부위가 명확하게 보이도록 해주세요.
-                                </p>
-                              </div>
+                      {/* 분석 결과 요약 */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="space-y-3"
+                        >
+                          {/* 신뢰도 20% 미만 경고 */}
+                          {result.confidence < 0.2 && (
+                            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 flex items-center gap-2.5">
+                              <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                              <p className="text-xs text-red-700">
+                                인식 신뢰도가 낮습니다. 사진을 더 명확하게
+                                찍어주세요.
+                              </p>
                             </div>
-                          </motion.div>
-                        )}
+                          )}
 
-                        {/* 분석 결과 */}
-                        <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                          <h3 className="text-xl font-bold text-primary mb-2">
-                            {getPartDisplayName(result.partName, meatInfo?.displayName)}
-                          </h3>
-                          <div className="flex flex-wrap gap-2">
-                            <Badge variant="outline">
-                              신뢰도: {(result.confidence * 100).toFixed(1)}%
-                            </Badge>
-                            {result.origin && (
-                              <Badge variant="secondary">{result.origin}</Badge>
-                            )}
-                            {result.grade && (
-                              <Badge className="bg-primary text-primary-foreground">
-                                {result.grade}
+                          {/* 부위명 + 뱃지 */}
+                          <div>
+                            <h3 className="text-2xl font-extrabold text-primary tracking-tight">
+                              {getPartDisplayName(
+                                result.partName,
+                                meatInfo?.displayName,
+                              )}
+                            </h3>
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              <Badge
+                                variant="outline"
+                                className="text-xs font-semibold border-primary/30 text-primary bg-primary/5"
+                              >
+                                신뢰도 {(result.confidence * 100).toFixed(1)}%
                               </Badge>
-                            )}
+                              {result.origin && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {result.origin}
+                                </Badge>
+                              )}
+                              {result.grade && (
+                                <Badge className="bg-primary text-primary-foreground text-xs">
+                                  {result.grade}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                        </div>
 
-                        {/* OCR/분석 결과 이력 정보 */}
-                        {/* OCR/분석 결과 이력 정보 — 실제 사이트와 동일 4개 섹션 */}
-                        {analysisResponse?.traceability && (
-                          <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
-                            <h4 className="text-sm font-semibold text-primary">
-                              이력 정보 (냉장고 연동용)
-                            </h4>
-                            <TraceabilityDetailSections
-                              info={analysisResponse.traceability}
-                              onSaveToFridge={() =>
-                                handleSaveTraceabilityToFridge(analysisResponse.traceability)
-                              }
-                              saving={savingFromTraceability}
-                            />
-                          </div>
-                        )}
-
-                        {/* 영양정보 및 가격정보 */}
-                        {meatInfo ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {/* 영양정보 */}
-                            <Card className="bg-card border-primary/20">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-semibold">
-                                  영양정보 (100g당)
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-1 text-sm">
-                                {/* Fallback 데이터 안내 */}
+                          {/* 영양정보 인라인 */}
+                          {meatInfo &&
+                            (meatInfo.calories !== null ||
+                              meatInfo.protein !== null ||
+                              meatInfo.fat !== null) && (
+                              <div className="p-3 rounded-xl bg-secondary/60 border border-border/40">
                                 {meatInfo.nutritionSource &&
                                   (meatInfo.nutritionSource === "fallback" ||
                                     meatInfo.nutritionSource === "timeout" ||
                                     meatInfo.nutritionSource === "error") && (
-                                    <div className="mb-2 p-3 rounded-lg bg-yellow-50/80 border border-yellow-200/50 flex items-start gap-2">
-                                      <AlertCircle className="w-4 h-4 text-yellow-700 flex-shrink-0 mt-0.5" />
-                                      <p className="text-xs text-yellow-800 leading-relaxed">
-                                        실시간 데이터 호출 실패 (사유:{" "}
-                                        {meatInfo.nutritionSource === "fallback"
-                                          ? "API 응답 없음"
-                                          : meatInfo.nutritionSource ===
-                                            "timeout"
-                                          ? "타임아웃"
-                                          : "연결 오류"}
-                                        ), 기본 데이터 사용 중
+                                    <div className="mb-2 flex items-center gap-1.5 text-[10px] text-yellow-700">
+                                      <AlertCircle className="w-3 h-3" />
+                                      실시간 데이터 호출 실패, 기본 데이터 사용
+                                      중
+                                    </div>
+                                  )}
+                                <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-wider mb-1.5">
+                                  영양정보 (100g)
+                                </p>
+                                <div className="grid grid-cols-3 gap-2">
+                                  {meatInfo.calories !== null && (
+                                    <div className="text-center p-2 rounded-lg bg-background/80">
+                                      <p className="text-xs text-muted-foreground">
+                                        칼로리
+                                      </p>
+                                      <p className="text-sm font-bold text-foreground">
+                                        {meatInfo.calories}
+                                        <span className="text-[10px] font-normal">
+                                          kcal
+                                        </span>
                                       </p>
                                     </div>
                                   )}
-                                {meatInfo.calories !== null && (
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">
-                                      칼로리
-                                    </span>
-                                    <span className="font-medium">
-                                      {meatInfo.calories}kcal
-                                    </span>
-                                  </div>
-                                )}
-                                {meatInfo.protein !== null && (
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">
-                                      단백질
-                                    </span>
-                                    <span className="font-medium">
-                                      {meatInfo.protein.toFixed(1)}g
-                                    </span>
-                                  </div>
-                                )}
-                                {meatInfo.fat !== null && (
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">
-                                      지방
-                                    </span>
-                                    <span className="font-medium">
-                                      {meatInfo.fat.toFixed(1)}g
-                                    </span>
-                                  </div>
-                                )}
-                                {meatInfo.carbohydrate !== null && (
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">
-                                      탄수화물
-                                    </span>
-                                    <span className="font-medium">
-                                      {meatInfo.carbohydrate.toFixed(1)}g
-                                    </span>
-                                  </div>
-                                )}
-                              </CardContent>
-                            </Card>
-
-                            {/* 가격정보 */}
-                            <Card className="bg-card border-primary/20">
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-semibold">
-                                  시세 정보
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-1 text-sm">
-                                {/* Fallback 데이터 안내 */}
-                                {meatInfo.priceSource === "fallback" && (
-                                  <div className="mb-2 p-3 rounded-lg bg-yellow-50/80 border border-yellow-200/50 flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 text-yellow-700 flex-shrink-0 mt-0.5" />
-                                    <p className="text-xs text-yellow-800 leading-relaxed">
-                                      실시간 데이터 호출 실패 (사유: API 응답
-                                      없음), 기본 데이터 사용 중
-                                    </p>
-                                  </div>
-                                )}
-                                {meatInfo.currentPrice > 0 ? (
-                                  <>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">
-                                        현재 가격
-                                      </span>
-                                      <span className="font-medium">
-                                        {meatInfo.currentPrice.toLocaleString()}
-                                        원
-                                      </span>
+                                  {meatInfo.protein !== null && (
+                                    <div className="text-center p-2 rounded-lg bg-background/80">
+                                      <p className="text-xs text-muted-foreground">
+                                        단백질
+                                      </p>
+                                      <p className="text-sm font-bold text-foreground">
+                                        {meatInfo.protein.toFixed(1)}
+                                        <span className="text-[10px] font-normal">
+                                          g
+                                        </span>
+                                      </p>
                                     </div>
-                                    {meatInfo.gradePrices &&
-                                      meatInfo.gradePrices.length > 0 && (
-                                        <div className="mt-2 space-y-1">
-                                          <div className="text-xs text-muted-foreground">
-                                            등급별 가격
-                                          </div>
-                                          {meatInfo.gradePrices.map((gp) => (
-                                            <div
-                                              key={`${gp.grade}-${gp.price}`}
-                                              className="flex flex-col text-xs"
-                                            >
-                                              <div className="flex items-center justify-between">
-                                                <span className="text-muted-foreground">
-                                                  {gp.grade}
-                                                </span>
-                                                <span className="flex items-center gap-2 font-medium">
-                                                  {gp.price.toLocaleString()}원
-                                                  <Badge
-                                                    variant={
-                                                      gp.trend === "up"
-                                                        ? "default"
-                                                        : gp.trend === "down"
-                                                        ? "secondary"
-                                                        : "outline"
-                                                    }
-                                                    className="text-[10px]"
-                                                  >
-                                                    {gp.trend === "up"
-                                                      ? "↑"
-                                                      : gp.trend === "down"
-                                                      ? "↓"
-                                                      : "→"}
-                                                  </Badge>
-                                                </span>
-                                              </div>
-                                              {gp.priceDate && (
-                                                <div className="flex justify-end text-[10px] text-muted-foreground">
-                                                  {gp.priceDate}
-                                                </div>
-                                              )}
-                                            </div>
-                                          ))}
+                                  )}
+                                  {meatInfo.fat !== null && (
+                                    <div className="text-center p-2 rounded-lg bg-background/80">
+                                      <p className="text-xs text-muted-foreground">
+                                        지방
+                                      </p>
+                                      <p className="text-sm font-bold text-foreground">
+                                        {meatInfo.fat.toFixed(1)}
+                                        <span className="text-[10px] font-normal">
+                                          g
+                                        </span>
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                        </motion.div>
+                      </div>
+                    </div>
+
+                    {/* 시세 정보 */}
+                    {meatInfo && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.05 }}
+                      >
+                        <div className="p-4 rounded-xl bg-card border border-border/50 shadow-sm">
+                          <h4 className="text-xs font-bold text-foreground/70 uppercase tracking-wider mb-3">
+                            시세 정보
+                          </h4>
+                          {meatInfo.priceSource === "fallback" && (
+                            <div className="mb-2 flex items-center gap-1.5 text-[10px] text-yellow-700">
+                              <AlertCircle className="w-3 h-3" />
+                              실시간 데이터 호출 실패, 기본 데이터 사용 중
+                            </div>
+                          )}
+                          {meatInfo.currentPrice > 0 ? (
+                            <div className="space-y-2">
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-sm text-muted-foreground">
+                                  현재 가격
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-lg font-extrabold text-primary">
+                                    {meatInfo.currentPrice.toLocaleString()}원
+                                  </span>
+                                  <Badge
+                                    variant={
+                                      meatInfo.priceTrend === "up"
+                                        ? "default"
+                                        : meatInfo.priceTrend === "down"
+                                          ? "secondary"
+                                          : "outline"
+                                    }
+                                    className="text-[10px]"
+                                  >
+                                    {meatInfo.priceTrend === "up"
+                                      ? "↑ 상승"
+                                      : meatInfo.priceTrend === "down"
+                                        ? "↓ 하락"
+                                        : "→ 보합"}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>단위: {meatInfo.priceUnit}</span>
+                                {meatInfo.priceDate && (
+                                  <span>기준일: {meatInfo.priceDate}</span>
+                                )}
+                              </div>
+                              {meatInfo.gradePrices &&
+                                meatInfo.gradePrices.length > 0 && (
+                                  <div className="mt-2 pt-2 border-t border-border/40">
+                                    <p className="text-[10px] text-muted-foreground mb-1.5">
+                                      등급별 가격
+                                    </p>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                                      {meatInfo.gradePrices.map((gp) => (
+                                        <div
+                                          key={`${gp.grade}-${gp.price}`}
+                                          className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-muted/30"
+                                        >
+                                          <span className="text-muted-foreground">
+                                            {gp.grade}
+                                          </span>
+                                          <span className="font-semibold">
+                                            {gp.price.toLocaleString()}원
+                                          </span>
                                         </div>
-                                      )}
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">
-                                        단위
-                                      </span>
-                                      <span className="font-medium">
-                                        {meatInfo.priceUnit}
-                                      </span>
+                                      ))}
                                     </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">
-                                        추세
-                                      </span>
-                                      <Badge
-                                        variant={
-                                          meatInfo.priceTrend === "up"
-                                            ? "default"
-                                            : meatInfo.priceTrend === "down"
-                                            ? "secondary"
-                                            : "outline"
-                                        }
-                                        className="text-xs"
-                                      >
-                                        {meatInfo.priceTrend === "up"
-                                          ? "↑ 상승"
-                                          : meatInfo.priceTrend === "down"
-                                          ? "↓ 하락"
-                                          : "→ 보합"}
-                                      </Badge>
-                                    </div>
-                                    {meatInfo.priceDate && (
-                                      <div className="text-xs text-muted-foreground mt-2">
-                                        기준일: {meatInfo.priceDate}
-                                      </div>
-                                    )}
-                                  </>
-                                ) : (
-                                  <div className="flex flex-col items-center justify-center py-8 px-4 text-center rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20">
-                                    <div className="w-14 h-14 mb-3 rounded-full bg-muted/60 flex items-center justify-center">
-                                      <FileText className="w-7 h-7 text-muted-foreground" />
-                                    </div>
-                                    <p className="text-sm font-semibold text-foreground mb-1">
-                                      가격 정보 제공 불가
-                                    </p>
-                                    <p className="text-xs text-muted-foreground max-w-[220px]">
-                                      이 부위는 시세 API에 등록되지 않아
-                                      가격정보를 제공하지 않습니다.
-                                    </p>
                                   </div>
                                 )}
-                              </CardContent>
-                            </Card>
-                          </div>
-                        ) : null}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 py-4 px-3 rounded-lg bg-muted/20 border border-dashed border-muted-foreground/20">
+                              <FileText className="w-5 h-5 text-muted-foreground/50" />
+                              <div>
+                                <p className="text-sm font-medium text-foreground/70">
+                                  가격 정보 없음
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  이 부위는 시세 API에 등록되지 않았습니다.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
 
-                        {/* 이 부위 레시피 추천 (분석 결과 있을 때만) */}
+                    {/* OCR/분석 결과 이력 정보 */}
+                    {analysisResponse?.traceability && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 }}
+                      >
+                        <div className="p-4 rounded-xl bg-primary/5 border border-primary/15 space-y-3">
+                          <h4 className="text-xs font-bold text-primary uppercase tracking-wider">
+                            이력 정보 (냉장고 연동용)
+                          </h4>
+                          <TraceabilityDetailSections
+                            info={analysisResponse.traceability}
+                            onSaveToFridge={() =>
+                              handleSaveTraceabilityToFridge(
+                                analysisResponse.traceability,
+                              )
+                            }
+                            saving={savingFromTraceability}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* 액션 버튼 그룹 */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.15 }}
+                      className="space-y-2"
+                    >
+                      {/* 레시피 + 냉장고 저장 */}
+                      <div className="grid grid-cols-2 gap-2">
                         <Button
                           onClick={handleRecipeForPart}
                           disabled={loadingRecipeForPart}
                           variant="outline"
-                          className="w-full border-primary text-primary hover:bg-primary/10"
+                          className="h-11 border-primary/30 text-primary hover:bg-primary/10 font-semibold text-sm rounded-xl"
                         >
                           {loadingRecipeForPart ? (
                             <>
-                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                              레시피 생성 중...
+                              <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                              생성 중...
                             </>
                           ) : (
                             <>
-                              <ChefHat className="w-4 h-4 mr-2" />
-                              이 부위 레시피 추천
+                              <ChefHat className="w-4 h-4 mr-1.5" />
+                              레시피 추천
                             </>
                           )}
                         </Button>
-                        {/* 저장 버튼 - 게스트 모드일 때 숨김 */}
-                        {!getIsGuest() && getAuthToken() && (
+                        {!getIsGuest() && getAuthToken() ? (
                           <Button
                             onClick={handleSaveToFridge}
                             disabled={saving}
-                            className="w-full bg-primary hover:bg-primary/90"
+                            className="h-11 bg-primary hover:bg-primary/90 font-semibold text-sm rounded-xl"
                           >
                             {saving ? (
                               <>
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
                                 저장 중...
                               </>
                             ) : (
-                              "냉장고에 저장하기"
+                              "냉장고에 저장"
                             )}
                           </Button>
-                        )}
-                        {getIsGuest() && (
-                          <div className="p-4 rounded-lg bg-muted/50 border border-border text-center">
-                            <p className="text-sm text-muted-foreground">
-                              냉장고 저장 기능은 로그인 후 이용할 수 있습니다.
-                            </p>
+                        ) : (
+                          <div className="flex items-center justify-center h-11 rounded-xl bg-muted/50 border border-border text-xs text-muted-foreground">
+                            로그인 후 저장 가능
                           </div>
                         )}
-                      </motion.div>
-                    </div>
+                      </div>
+
+                      {/* 다시 분석 + 모드 전환 */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          onClick={reset}
+                          variant="outline"
+                          className="h-11 border-primary/30 text-primary hover:bg-primary/10 font-semibold text-sm rounded-xl gap-1.5"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          {mode === "beef" ? "소 다시 분석" : "돼지 다시 분석"}
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            reset();
+                            setMode("ocr");
+                          }}
+                          variant="outline"
+                          className="h-11 border-muted-foreground/25 text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5 font-semibold text-sm rounded-xl gap-1.5"
+                        >
+                          <FileText className="w-4 h-4" />
+                          OCR 이력번호
+                        </Button>
+                      </div>
+                    </motion.div>
                   </div>
                 ) : (
                   /* 이미지 선택 후 분석 전 - 이미지와 분석 버튼 */
@@ -1740,8 +1902,8 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                             {mode === "ocr"
                               ? "OCR 인식 시작"
                               : mode === "beef"
-                              ? "소 부위 분석"
-                              : "돼지 부위 분석"}
+                                ? "소 부위 분석"
+                                : "돼지 부위 분석"}
                           </>
                         )}
                       </Button>
@@ -1787,137 +1949,173 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                   <CheckCircle2 className="w-10 h-10 text-primary" />
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-1">저장되었습니다</h3>
-              <p className="text-sm text-muted-foreground">냉장고에 추가되었습니다.</p>
+              <h3 className="text-xl font-bold text-foreground mb-1">
+                저장되었습니다
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                냉장고에 추가되었습니다.
+              </p>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 이력번호/묶음번호 조회 — OCR 실패 시 또는 "직접 입력" 클릭 시 노출 */}
-      {showTraceabilitySection && (
-        <div ref={traceabilitySectionRef} className="space-y-3">
-          {ocrFailed && (
-            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-center">
-              <p className="text-sm font-medium">
-                이미지에서 이력번호를 인식하지 못했습니다. 아래에서 이력번호를 직접 입력해 조회해 보세요.
-              </p>
-            </div>
-          )}
-          <Card className="bg-card/95 backdrop-blur border-primary/20 shadow-lg shadow-primary/5 rounded-2xl overflow-hidden">
-            <CardHeader className="pb-2 px-4 sm:px-6 pt-4 sm:pt-6">
-              <CardTitle className="text-base sm:text-lg">이력번호 / 묶음번호로 조회</CardTitle>
-              <div className="flex gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs sm:text-sm mt-2">
-                <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                <p>
-                  <strong>국내육</strong> 12자리 이력번호 또는 묶음번호(L+숫자) 조회 시 <strong>M-Trace 등 외부 사이트로 이동</strong>됩니다. 수입육 묶음번호(A+숫자)는 이 사이트에서 조회됩니다.
+      {/* 이력번호/묶음번호 조회 — OCR 실패 시 또는 "직접 입력" 클릭 시 노출, 단 OCR 자동조회 결과가 인라인에 이미 표시 중이면 숨김 */}
+      {showTraceabilitySection &&
+        !(
+          mode === "ocr" &&
+          autoLookupDone &&
+          (manualTraceability || manualTraceabilityList?.length)
+        ) && (
+          <div ref={traceabilitySectionRef} className="space-y-3">
+            {ocrFailed && (
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-center">
+                <p className="text-sm font-medium">
+                  이미지에서 이력번호를 인식하지 못했습니다. 아래에서 이력번호를
+                  직접 입력해 조회해 보세요.
                 </p>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3 px-4 sm:px-6 pb-4 sm:pb-6">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Input
-                  placeholder="예: 002188519524 또는 L12601205379002 (국산), A41535850069100026012505 (수입)"
-                  value={traceInput}
-                  onChange={(e) => {
-                    setTraceInput(e.target.value);
-                    setManualTraceError(null);
-                  }}
-                  onKeyDown={(e) => e.key === "Enter" && handleTraceabilityLookup()}
-                  className="flex-1 min-h-11 sm:min-h-10"
-                />
-                <Button
-                  onClick={() => handleTraceabilityLookup()}
-                  disabled={manualTraceLoading}
-                  variant="secondary"
-                  className="shrink-0 min-h-11 sm:min-h-10 font-semibold"
-                >
-                  {manualTraceLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    "조회"
-                  )}
-                </Button>
-              </div>
-              {manualTraceError && (
-                <p className="text-sm text-destructive">{manualTraceError}</p>
-              )}
-              {manualTraceabilityList && manualTraceabilityList.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-primary">
-                    묶음 이력 목록 ({manualTraceabilityList.length}건) — 클릭 시 상세
-                  </h4>
-                  <ul className="space-y-2 max-h-48 overflow-y-auto">
-                    {manualTraceabilityList.map((item, idx) => (
-                      <li key={item.historyNo ?? idx}>
-                        <button
-                          type="button"
-                          onClick={() => handleTraceItemClick(item.historyNo)}
-                          disabled={detailLoading}
-                          className="w-full text-left p-3 rounded-lg border border-border hover:bg-primary/10 hover:border-primary/30 transition-colors disabled:opacity-50"
-                        >
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {item.historyNo || "(이력번호 없음)"}
-                          </span>
-                          {(item.origin || item.partName || item.slaughterDate) && (
-                            <span className="ml-2 text-sm">
-                              {[item.origin, item.partName, item.slaughterDate]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </span>
-                          )}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  {detailLoading && (
-                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+            )}
+            <Card className="bg-card/95 backdrop-blur border-primary/20 shadow-lg shadow-primary/5 rounded-2xl overflow-hidden">
+              <CardHeader className="pb-2 px-4 sm:px-6 pt-4 sm:pt-6">
+                <CardTitle className="text-base sm:text-lg">
+                  이력번호 / 묶음번호로 조회
+                </CardTitle>
+                <div className="flex gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs sm:text-sm mt-2">
+                  <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                  <p>
+                    <strong>국내육</strong> 12자리 이력번호 또는
+                    묶음번호(L+숫자) 조회 시{" "}
+                    <strong>M-Trace 등 외부 사이트로 이동</strong>됩니다. 수입육
+                    묶음번호(A+숫자)는 이 사이트에서 조회됩니다.
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 px-4 sm:px-6 pb-4 sm:pb-6">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Input
+                    placeholder="예: 002188519524 또는 L12601205379002 (국산), A41535850069100026012505 (수입)"
+                    value={traceInput}
+                    onChange={(e) => {
+                      setTraceInput(e.target.value);
+                      setManualTraceError(null);
+                    }}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleTraceabilityLookup()
+                    }
+                    className="flex-1 min-h-11 sm:min-h-10"
+                  />
+                  <Button
+                    onClick={() => handleTraceabilityLookup()}
+                    disabled={manualTraceLoading}
+                    variant="secondary"
+                    className="shrink-0 min-h-11 sm:min-h-10 font-semibold"
+                  >
+                    {manualTraceLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      상세 정보 조회 중...
-                    </p>
-                  )}
-                  {selectedTraceDetail && (
-                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
+                    ) : (
+                      "조회"
+                    )}
+                  </Button>
+                </div>
+                {manualTraceError && (
+                  <p className="text-sm text-destructive">{manualTraceError}</p>
+                )}
+                {manualTraceabilityList &&
+                  manualTraceabilityList.length > 0 && (
+                    <div className="space-y-3">
                       <h4 className="text-sm font-semibold text-primary">
-                        선택 이력 상세 (냉장고 연동용)
+                        묶음 이력 목록 ({manualTraceabilityList.length}건) —
+                        클릭 시 상세
                       </h4>
-                      <TraceabilityDetailSections
-                        info={selectedTraceDetail}
-                        onSaveToFridge={() =>
-                          handleSaveTraceabilityToFridge(selectedTraceDetail)
-                        }
-                        saving={savingFromTraceability}
-                      />
+                      <ul className="space-y-2 max-h-48 overflow-y-auto">
+                        {manualTraceabilityList.map((item, idx) => (
+                          <li key={item.historyNo ?? idx}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleTraceItemClick(item.historyNo)
+                              }
+                              disabled={detailLoading}
+                              className="w-full text-left p-3 rounded-lg border border-border hover:bg-primary/10 hover:border-primary/30 transition-colors disabled:opacity-50"
+                            >
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {item.historyNo || "(이력번호 없음)"}
+                              </span>
+                              {(item.origin ||
+                                item.partName ||
+                                item.slaughterDate) && (
+                                <span className="ml-2 text-sm">
+                                  {[
+                                    item.origin,
+                                    item.partName,
+                                    item.slaughterDate,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      {detailLoading && (
+                        <p className="text-sm text-muted-foreground flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          상세 정보 조회 중...
+                        </p>
+                      )}
+                      {selectedTraceDetail && (
+                        <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
+                          <h4 className="text-sm font-semibold text-primary">
+                            선택 이력 상세 (냉장고 연동용)
+                          </h4>
+                          <TraceabilityDetailSections
+                            info={selectedTraceDetail}
+                            onSaveToFridge={() =>
+                              handleSaveTraceabilityToFridge(
+                                selectedTraceDetail,
+                              )
+                            }
+                            saving={savingFromTraceability}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
-              {manualTraceability && !manualTraceabilityList?.length && (
-                <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
-                  <h4 className="text-sm font-semibold text-primary">
-                    이력 정보 (냉장고 연동용)
-                  </h4>
-                  <TraceabilityDetailSections
-                    info={manualTraceability}
-                    onSaveToFridge={() =>
-                      handleSaveTraceabilityToFridge(manualTraceability)
-                    }
-                    saving={savingFromTraceability}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
+                {manualTraceability && !manualTraceabilityList?.length && (
+                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
+                    <h4 className="text-sm font-semibold text-primary">
+                      이력 정보 (냉장고 연동용)
+                    </h4>
+                    <TraceabilityDetailSections
+                      info={manualTraceability}
+                      onSaveToFridge={() =>
+                        handleSaveTraceabilityToFridge(manualTraceability)
+                      }
+                      saving={savingFromTraceability}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
       {/* 이 부위 레시피 추천 모달 */}
-      <Dialog open={showRecipeForPartModal} onOpenChange={setShowRecipeForPartModal}>
+      <Dialog
+        open={showRecipeForPartModal}
+        onOpenChange={setShowRecipeForPartModal}
+      >
         <DialogContent className="max-w-4xl bg-card max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
             <DialogTitle className="flex items-center gap-2 text-xl text-primary">
               <ChefHat className="w-5 h-5" />
-              {getPartDisplayName(result?.partName ?? undefined, meatInfo?.displayName)} 레시피 추천
+              {getPartDisplayName(
+                result?.partName ?? undefined,
+                meatInfo?.displayName,
+              )}{" "}
+              레시피 추천
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-hidden px-6">
@@ -1927,7 +2125,9 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                   <ReactMarkdown>{recipeForPartContent}</ReactMarkdown>
                 </div>
               ) : (
-                <p className="text-muted-foreground py-4">레시피를 불러오는 중...</p>
+                <p className="text-muted-foreground py-4">
+                  레시피를 불러오는 중...
+                </p>
               )}
             </ScrollArea>
           </div>

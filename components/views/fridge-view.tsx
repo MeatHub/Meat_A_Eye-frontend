@@ -10,6 +10,10 @@ import {
   Edit2,
   Save,
   X,
+  ChefHat,
+  Loader2,
+  Thermometer,
+  Snowflake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,8 +55,19 @@ import {
   getAuthToken,
 } from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
+import { LLMRecipeModal } from "@/components/llm-recipe-modal";
 import { useRouter } from "next/navigation";
 import type { FridgeItemResponse } from "@/src/types/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function FridgeView() {
   const router = useRouter();
@@ -94,6 +109,16 @@ export function FridgeView() {
     storageDate: new Date().toISOString().split("T")[0],
     expiryDate: "",
   });
+  const [showFridgeRecipeModal, setShowFridgeRecipeModal] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [consumeConfirmId, setConsumeConfirmId] = useState<number | null>(null);
+  const [addPreviewNutrition, setAddPreviewNutrition] = useState<{
+    calories: number | null;
+    protein: number | null;
+    fat: number | null;
+    carbohydrate: number | null;
+  } | null>(null);
+  const [addPreviewLoading, setAddPreviewLoading] = useState(false);
 
   useEffect(() => {
     // 게스트 모드 체크
@@ -163,14 +188,14 @@ export function FridgeView() {
             try {
               const traceInfo = await getTraceabilityByNumber(
                 item.traceNumber,
-                "import"
+                "import",
               );
               grade = traceInfo.grade || null;
               partName = traceInfo.partName || null;
             } catch (error) {
               console.error(
                 `Failed to load traceability for ${item.traceNumber}:`,
-                error
+                error,
               );
               // API 호출 실패해도 계속 진행 (부위명만으로 영양정보 찾기)
             }
@@ -183,7 +208,7 @@ export function FridgeView() {
         // 부위명이 없으면 currentMeatInfoList에서 가져오기
         if (!partName) {
           const meatInfo = currentMeatInfoList.find(
-            (m) => m.id === item.meatInfoId
+            (m) => m.id === item.meatInfoId,
           );
           if (meatInfo) {
             partName = meatInfo.name;
@@ -270,7 +295,7 @@ export function FridgeView() {
     }
   };
 
-  const handleDeleteItem = async (id: number) => {
+  const handleDeleteItem = (id: number) => {
     // 게스트 모드 체크
     if (getIsGuest() || !getAuthToken()) {
       toast({
@@ -281,18 +306,20 @@ export function FridgeView() {
       router.push("/login");
       return;
     }
+    setDeleteConfirmId(id);
+  };
 
-    // confirm 제거 - 바로 삭제하고 toast로 알림만 표시
+  const handleConfirmDelete = async () => {
+    if (deleteConfirmId === null) return;
+    const id = deleteConfirmId;
+    setDeleteConfirmId(null);
     try {
       await deleteFridgeItem(id);
-      // 상태 업데이트 전에 toast 표시
-      const successMsg = "고기가 삭제되었습니다.";
       toast({
         title: "삭제 완료",
-        description: successMsg,
+        description: "고기가 삭제되었습니다.",
         duration: 3000,
       });
-      // 상태 업데이트는 약간의 지연 후 실행하여 toast가 먼저 표시되도록
       setTimeout(() => {
         setFridgeItems((prev) => prev.filter((item) => item.id !== id));
       }, 100);
@@ -308,7 +335,7 @@ export function FridgeView() {
     }
   };
 
-  const handleConsumeItem = async (id: number) => {
+  const handleConsumeItem = (id: number) => {
     // 게스트 모드 체크
     if (getIsGuest() || !getAuthToken()) {
       toast({
@@ -319,13 +346,18 @@ export function FridgeView() {
       router.push("/login");
       return;
     }
+    setConsumeConfirmId(id);
+  };
 
+  const handleConfirmConsume = async () => {
+    if (consumeConfirmId === null) return;
+    const id = consumeConfirmId;
+    setConsumeConfirmId(null);
     try {
       await updateFridgeItemStatus(id, "consumed");
-      const successMsg = "고기가 소비됨으로 표시되었습니다.";
       toast({
-        title: "상태 변경 완료",
-        description: successMsg,
+        title: "소비 완료",
+        description: "고기가 소비됨으로 표시되었습니다.",
         duration: 3000,
       });
       await loadFridgeItems();
@@ -344,7 +376,8 @@ export function FridgeView() {
   const handleStartEdit = (item: FridgeItemResponse) => {
     setEditingItemId(item.id);
     setEditForm({
-      meatInfoId: item.meatInfoId && item.meatInfoId > 0 ? item.meatInfoId : null,
+      meatInfoId:
+        item.meatInfoId && item.meatInfoId > 0 ? item.meatInfoId : null,
       customName: item.customName ?? "",
       desiredConsumptionDate: item.desiredConsumptionDate
         ? new Date(item.desiredConsumptionDate).toISOString().split("T")[0]
@@ -358,7 +391,7 @@ export function FridgeView() {
           item.id,
           item.meatInfoId,
           meatInfo.name,
-          item.grade || null
+          item.grade || null,
         );
       }
     }
@@ -368,7 +401,7 @@ export function FridgeView() {
     itemId: number,
     meatInfoId: number,
     partName: string,
-    grade: string | null = null
+    grade: string | null = null,
   ) => {
     setLoadingNutrition((prev) => ({ ...prev, [itemId]: true }));
     try {
@@ -388,7 +421,11 @@ export function FridgeView() {
 
   const handleCancelEdit = () => {
     setEditingItemId(null);
-    setEditForm({ meatInfoId: null, customName: "", desiredConsumptionDate: "" });
+    setEditForm({
+      meatInfoId: null,
+      customName: "",
+      desiredConsumptionDate: "",
+    });
   };
 
   const handleSaveEdit = async (id: number) => {
@@ -429,8 +466,8 @@ export function FridgeView() {
                 name: res.name,
                 customName: res.customName ?? i.customName,
               }
-            : i
-        )
+            : i,
+        ),
       );
 
       // 저장 후 즉시 영양정보 로드
@@ -441,7 +478,7 @@ export function FridgeView() {
           id,
           editForm.meatInfoId!,
           meatInfo.name,
-          currentItem.grade || null
+          currentItem.grade || null,
         );
       }
 
@@ -542,86 +579,269 @@ export function FridgeView() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-primary">냉장고 관리</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            보관 중인 고기 {fridgeItems.filter((i) => i.status === "stored").length}개
-          </p>
+      {/* Header - 냉장고 테마 배너 */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-accent/10 border-2 border-primary/20 p-6 shadow-lg"
+      >
+        {/* 배경 장식 */}
+        <div className="absolute top-3 right-4 opacity-10">
+          <Snowflake className="w-24 h-24 text-primary" />
         </div>
-        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-          <DialogTrigger asChild>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button className="bg-primary hover:bg-primary/90 gap-2">
-                <Plus className="w-4 h-4" />
-                추가하기
+        <div className="absolute bottom-2 right-28 opacity-[0.07]">
+          <Thermometer className="w-16 h-16 text-primary" />
+        </div>
+
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="p-2 rounded-xl bg-primary/15 border border-primary/20">
+                <Snowflake className="w-5 h-5 text-primary" />
+              </div>
+              <h2 className="text-2xl font-bold text-primary tracking-tight">
+                나의 냉장고
+              </h2>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1 ml-[52px]">
+              보관 중인 고기{" "}
+              <span className="font-bold text-primary">
+                {fridgeItems.filter((i) => i.status === "stored").length}
+              </span>
+              개
+              {fridgeItems.some(
+                (i) => i.dDay <= 3 && i.status === "stored",
+              ) && (
+                <span className="ml-2 text-red-600 font-medium">
+                  · 유통기한 임박{" "}
+                  {
+                    fridgeItems.filter(
+                      (i) => i.dDay <= 3 && i.status === "stored",
+                    ).length
+                  }
+                  개
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="flex gap-2 ml-[52px] sm:ml-0">
+            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <Button
+                onClick={() => setShowFridgeRecipeModal(true)}
+                variant="outline"
+                className="gap-2 border-primary text-primary hover:bg-primary/10 font-semibold"
+              >
+                <ChefHat className="w-4 h-4" />
+                <span className="hidden sm:inline">냉장고 기반</span> 레시피
+                추천
               </Button>
             </motion.div>
-          </DialogTrigger>
-          <DialogContent className="bg-card">
-            <DialogHeader>
-              <DialogTitle className="text-primary">고기 추가하기</DialogTitle>
-              <DialogDescription>
-                냉장고에 보관할 고기 정보를 입력하세요
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="meatId">고기 ID *</Label>
-                <Input
-                  id="meatId"
-                  type="number"
-                  placeholder="meat_info 테이블의 ID 입력"
-                  value={newItem.meatId}
-                  onChange={(e) =>
-                    setNewItem({ ...newItem, meatId: e.target.value })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  참고: 실제 구현에서는 meat_info 테이블에서 선택하도록
-                  드롭다운을 제공해야 합니다.
-                </p>
-              </div>
+            <Dialog
+              open={isAddModalOpen}
+              onOpenChange={(open) => {
+                setIsAddModalOpen(open);
+                if (!open) {
+                  setNewItem({
+                    meatId: "",
+                    storageDate: new Date().toISOString().split("T")[0],
+                    expiryDate: "",
+                  });
+                  setAddPreviewNutrition(null);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <motion.div
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  <Button className="bg-primary hover:bg-primary/90 gap-2">
+                    <Plus className="w-4 h-4" />
+                    추가하기
+                  </Button>
+                </motion.div>
+              </DialogTrigger>
+              <DialogContent className="bg-card sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-primary">
+                    고기 추가하기
+                  </DialogTitle>
+                  <DialogDescription>
+                    냉장고에 보관할 고기 정보를 입력하세요
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="meatPart">고기 부위 *</Label>
+                    <Select
+                      value={newItem.meatId}
+                      onValueChange={async (value) => {
+                        setNewItem({ ...newItem, meatId: value });
+                        // 부위 선택 시 영양정보 미리보기
+                        if (value) {
+                          const selectedMeat = meatInfoList.find(
+                            (m) => m.id === parseInt(value),
+                          );
+                          if (selectedMeat) {
+                            setAddPreviewLoading(true);
+                            try {
+                              const nutrition = await getNutritionInfo(
+                                selectedMeat.name,
+                              );
+                              setAddPreviewNutrition(nutrition.default || null);
+                            } catch {
+                              setAddPreviewNutrition(null);
+                            } finally {
+                              setAddPreviewLoading(false);
+                            }
+                          }
+                        } else {
+                          setAddPreviewNutrition(null);
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="meatPart" className="w-full">
+                        <SelectValue placeholder="부위를 선택하세요" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {meatInfoList.length > 0 ? (
+                          <>
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                              소고기
+                            </div>
+                            {meatInfoList
+                              .filter((m) => m.category === "beef")
+                              .map((meat) => (
+                                <SelectItem
+                                  key={meat.id}
+                                  value={meat.id.toString()}
+                                >
+                                  {meat.displayName || meat.name}
+                                </SelectItem>
+                              ))}
+                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-1">
+                              돼지고기
+                            </div>
+                            {meatInfoList
+                              .filter((m) => m.category === "pork")
+                              .map((meat) => (
+                                <SelectItem
+                                  key={meat.id}
+                                  value={meat.id.toString()}
+                                >
+                                  {meat.displayName || meat.name}
+                                </SelectItem>
+                              ))}
+                          </>
+                        ) : (
+                          <SelectItem value="0" disabled>
+                            로딩 중...
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="storageDate">보관일 *</Label>
-                <Input
-                  id="storageDate"
-                  type="date"
-                  value={newItem.storageDate}
-                  onChange={(e) =>
-                    setNewItem({ ...newItem, storageDate: e.target.value })
-                  }
-                />
-              </div>
+                  {/* 영양정보 미리보기 */}
+                  {addPreviewLoading && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground p-3 rounded-lg bg-muted/50">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      영양정보 로딩 중...
+                    </div>
+                  )}
+                  {addPreviewNutrition && !addPreviewLoading && (
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                      <p className="text-xs font-semibold text-primary mb-2">
+                        영양정보 (100g당)
+                      </p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        {addPreviewNutrition.calories !== null && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              칼로리
+                            </span>
+                            <span className="font-medium">
+                              {addPreviewNutrition.calories}kcal
+                            </span>
+                          </div>
+                        )}
+                        {addPreviewNutrition.protein !== null && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              단백질
+                            </span>
+                            <span className="font-medium">
+                              {addPreviewNutrition.protein}g
+                            </span>
+                          </div>
+                        )}
+                        {addPreviewNutrition.fat !== null && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">지방</span>
+                            <span className="font-medium">
+                              {addPreviewNutrition.fat}g
+                            </span>
+                          </div>
+                        )}
+                        {addPreviewNutrition.carbohydrate !== null && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              탄수화물
+                            </span>
+                            <span className="font-medium">
+                              {addPreviewNutrition.carbohydrate}g
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-              <div className="space-y-2">
-                <Label htmlFor="expiryDate">유통기한 *</Label>
-                <Input
-                  id="expiryDate"
-                  type="date"
-                  value={newItem.expiryDate}
-                  onChange={(e) =>
-                    setNewItem({ ...newItem, expiryDate: e.target.value })
-                  }
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="storageDate">보관일 *</Label>
+                      <Input
+                        id="storageDate"
+                        type="date"
+                        value={newItem.storageDate}
+                        onChange={(e) =>
+                          setNewItem({
+                            ...newItem,
+                            storageDate: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="expiryDate">유통기한 *</Label>
+                      <Input
+                        id="expiryDate"
+                        type="date"
+                        value={newItem.expiryDate}
+                        onChange={(e) =>
+                          setNewItem({ ...newItem, expiryDate: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
 
-              <Button
-                onClick={handleAddItem}
-                className="w-full bg-primary hover:bg-primary/90"
-              >
-                추가하기
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+                  <Button
+                    onClick={handleAddItem}
+                    disabled={!newItem.meatId || !newItem.expiryDate}
+                    className="w-full bg-primary hover:bg-primary/90 font-semibold"
+                  >
+                    추가하기
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Items List */}
       {fridgeItems.length === 0 ? (
-        <Card className="bg-card border-primary/20">
+        <Card className="bg-gradient-to-br from-card to-secondary/30 border-primary/15 rounded-2xl shadow-sm">
           <CardContent className="py-16">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -629,7 +849,9 @@ export function FridgeView() {
               transition={{ duration: 0.3 }}
               className="text-center"
             >
-              <AlertCircle className="w-20 h-20 mx-auto mb-6 text-muted-foreground/50" />
+              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-primary/10 border border-primary/15 flex items-center justify-center">
+                <Snowflake className="w-10 h-10 text-primary/60" />
+              </div>
               <h3 className="text-xl font-semibold mb-2 text-foreground">
                 아직 분석한 고기가 없습니다
               </h3>
@@ -661,7 +883,7 @@ export function FridgeView() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <AnimatePresence>
             {fridgeItems
               .filter((item) => item.status === "stored")
@@ -670,21 +892,29 @@ export function FridgeView() {
                 const color = getDDayColor(daysLeft);
 
                 const borderColors = {
-                  red: "border-red-500",
-                  yellow: "border-yellow-500",
-                  green: "border-green-500",
+                  red: "border-red-400/60",
+                  yellow: "border-amber-400/60",
+                  green: "border-emerald-400/60",
                 };
 
                 const bgColors = {
-                  red: "bg-red-50",
-                  yellow: "bg-yellow-50",
-                  green: "bg-green-50",
+                  red: "bg-gradient-to-br from-red-50/80 to-red-100/40",
+                  yellow: "bg-gradient-to-br from-amber-50/80 to-amber-100/40",
+                  green:
+                    "bg-gradient-to-br from-emerald-50/80 to-emerald-100/40",
                 };
 
                 const badgeColors = {
-                  red: "bg-red-500 text-white",
-                  yellow: "bg-yellow-500 text-white",
-                  green: "bg-green-500 text-white",
+                  red: "bg-red-500 text-white shadow-red-200 shadow-sm",
+                  yellow: "bg-amber-500 text-white shadow-amber-200 shadow-sm",
+                  green:
+                    "bg-emerald-500 text-white shadow-emerald-200 shadow-sm",
+                };
+
+                const accentBar = {
+                  red: "bg-red-500",
+                  yellow: "bg-amber-500",
+                  green: "bg-emerald-500",
                 };
 
                 return (
@@ -698,11 +928,13 @@ export function FridgeView() {
                     className="relative"
                   >
                     <Card
-                      className={`bg-card border-2 ${borderColors[color]} ${bgColors[color]} shadow-md hover:shadow-lg transition-all`}
+                      className={`relative overflow-hidden border ${borderColors[color]} ${bgColors[color]} shadow-md hover:shadow-xl transition-all duration-300 h-full flex flex-col rounded-xl`}
                     >
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
+                      {/* 상단 컬러 바 */}
+                      <div className={`h-1 w-full ${accentBar[color]}`} />
+                      <CardHeader className="pb-2 pt-3 px-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
                             {editingItemId === item.id ? (
                               <div className="space-y-2">
                                 <div className="space-y-1">
@@ -723,9 +955,8 @@ export function FridgeView() {
                                         ...editForm,
                                         meatInfoId: newMeatInfoId,
                                       });
-                                      // 부위 변경 시 영양정보 로드
                                       const currentItem = fridgeItems.find(
-                                        (i) => i.id === editingItemId
+                                        (i) => i.id === editingItemId,
                                       );
                                       if (
                                         currentItem &&
@@ -733,18 +964,17 @@ export function FridgeView() {
                                         newMeatInfoId > 0
                                       ) {
                                         const meatInfo = meatInfoList.find(
-                                          (m) => m.id === newMeatInfoId
+                                          (m) => m.id === newMeatInfoId,
                                         );
                                         if (meatInfo) {
                                           await loadNutritionForItem(
                                             currentItem.id,
                                             newMeatInfoId,
                                             meatInfo.name,
-                                            currentItem.grade || null
+                                            currentItem.grade || null,
                                           );
                                         }
                                       } else {
-                                        // 부위 선택 해제 시 영양정보도 제거
                                         setNutritionData((prev) => {
                                           const updated = { ...prev };
                                           delete updated[currentItem?.id || 0];
@@ -753,7 +983,7 @@ export function FridgeView() {
                                       }
                                     }}
                                   >
-                                    <SelectTrigger className="text-lg font-semibold">
+                                    <SelectTrigger className="text-base font-semibold">
                                       <SelectValue placeholder="부위 선택" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -763,8 +993,7 @@ export function FridgeView() {
                                             key={meat.id}
                                             value={meat.id.toString()}
                                           >
-                                            {(meat.displayName || meat.name)}{" "}
-                                            (
+                                            {meat.displayName || meat.name} (
                                             {meat.category === "beef"
                                               ? "소"
                                               : "돼지"}
@@ -782,77 +1011,108 @@ export function FridgeView() {
                               </div>
                             ) : (
                               <>
-                                <CardTitle className="text-lg text-foreground">
-                                  {item.meatInfoId && item.meatInfoId > 0
-                                    ? (() => {
-                                        const meat = meatInfoList.find(
-                                          (m) => m.id === item.meatInfoId
-                                        );
-                                        return meat
-                                          ? meat.displayName || meat.name
-                                          : item.name && item.name !== "알 수 없음"
-                                            ? item.name
-                                            : "부위 선택";
-                                      })()
-                                    : item.name && item.name !== "알 수 없음"
-                                      ? item.name
-                                      : "부위 선택"}
-                                </CardTitle>
-                                {item.grade && (
-                                  <Badge
-                                    variant="outline"
-                                    className="mt-1 text-xs"
-                                  >
-                                    등급: {item.grade}
-                                  </Badge>
+                                {(() => {
+                                  const rawName =
+                                    item.meatInfoId && item.meatInfoId > 0
+                                      ? (() => {
+                                          const meat = meatInfoList.find(
+                                            (m) => m.id === item.meatInfoId,
+                                          );
+                                          return meat
+                                            ? meat.displayName || meat.name
+                                            : item.name &&
+                                                item.name !== "알 수 없음"
+                                              ? item.name
+                                              : "부위 선택";
+                                        })()
+                                      : item.name && item.name !== "알 수 없음"
+                                        ? item.name
+                                        : "부위 선택";
+                                  const parts = rawName.includes("/")
+                                    ? rawName.split("/")
+                                    : [null, rawName];
+                                  const category = parts[0];
+                                  const partName =
+                                    parts.length > 1 ? parts[1] : parts[0];
+                                  return (
+                                    <div className="flex flex-col gap-0.5">
+                                      {category && (
+                                        <span className="text-[10px] font-semibold text-primary/70 uppercase tracking-wider">
+                                          {category}
+                                        </span>
+                                      )}
+                                      <CardTitle className="text-base font-bold text-foreground leading-tight">
+                                        {partName}
+                                      </CardTitle>
+                                    </div>
+                                  );
+                                })()}
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full font-medium">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                    보관 중
+                                  </span>
+                                  {item.grade && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] px-1.5 py-0 border-primary/30"
+                                    >
+                                      {item.grade}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {item.traceNumber && (
+                                  <p className="text-[10px] font-mono text-muted-foreground/70 mt-1 truncate">
+                                    {item.traceNumber}
+                                  </p>
                                 )}
                               </>
                             )}
-                            <CardDescription className="mt-1">
-                              상태:{" "}
-                              {item.status === "stored" ? "보관 중" : "소비됨"}
-                            </CardDescription>
-                            {item.traceNumber && (
-                              <CardDescription className="mt-1 text-xs font-mono">
-                                이력번호: {item.traceNumber}
-                              </CardDescription>
-                            )}
                           </div>
                           <Badge
-                            className={`${badgeColors[color]} border-0 font-bold`}
+                            className={`${badgeColors[color]} border-0 font-bold text-[10px] shrink-0 rounded-lg px-2 py-0.5`}
                           >
                             D{daysLeft >= 0 ? "-" : "+"}
                             {Math.abs(daysLeft)}
                           </Badge>
                         </div>
                       </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar className="w-4 h-4" />
-                          <span>
-                            유통기한:{" "}
-                            {new Date(item.expiryDate).toLocaleDateString(
-                              "ko-KR"
-                            )}
-                          </span>
-                        </div>
+                      <CardContent className="flex-1 flex flex-col pt-0 px-4 pb-4">
                         {editingItemId === item.id ? (
-                          <div className="space-y-2 pt-2 border-t">
+                          <>
+                            {/* 편집 모드 날짜 정보 */}
+                            <div className="space-y-1.5 mb-2">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                                <span>
+                                  유통기한:{" "}
+                                  {new Date(item.expiryDate).toLocaleDateString(
+                                    "ko-KR",
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          </>
+                        ) : null}
+
+                        {editingItemId === item.id ? (
+                          <div className="space-y-3 pt-2 border-t border-border/50">
                             {item.grade && (
-                              <div className="text-xs text-muted-foreground mb-2">
+                              <div className="text-xs text-muted-foreground">
                                 등급: {item.grade} (이력번호에서 자동 설정)
                               </div>
                             )}
                             {loadingNutrition[item.id] ? (
-                              <div className="text-xs text-muted-foreground">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Loader2 className="w-3 h-3 animate-spin" />
                                 영양정보 로딩 중...
                               </div>
                             ) : nutritionData[item.id] ? (
-                              <div className="text-xs space-y-1 bg-secondary/50 p-2 rounded">
-                                <div className="font-semibold">
+                              <div className="text-xs p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                                <div className="font-semibold text-primary mb-1.5">
                                   영양정보 (100g당)
                                 </div>
-                                <div className="grid grid-cols-2 gap-1">
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                                   {nutritionData[item.id]?.calories !==
                                     null && (
                                     <div>
@@ -885,7 +1145,7 @@ export function FridgeView() {
                                 표시 이름 (선택 사항)
                               </Label>
                               <Input
-                                placeholder="예: 우리 집 등심 (레시피에 이 이름이 사용됩니다)"
+                                placeholder="예: 우리 집 등심"
                                 value={editForm.customName}
                                 onChange={(e) =>
                                   setEditForm({
@@ -893,11 +1153,8 @@ export function FridgeView() {
                                     customName: e.target.value,
                                   })
                                 }
-                                className="text-sm"
+                                className="text-sm h-9"
                               />
-                              <p className="text-xs text-muted-foreground mt-1">
-                                비워두면 위에서 선택한 고기 부위명이 사용됩니다.
-                              </p>
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">희망 섭취기간</Label>
@@ -910,14 +1167,14 @@ export function FridgeView() {
                                     desiredConsumptionDate: e.target.value,
                                   })
                                 }
-                                className="text-sm"
+                                className="text-sm h-9"
                               />
                             </div>
                             <div className="flex gap-2">
                               <Button
                                 onClick={() => handleSaveEdit(item.id)}
                                 size="sm"
-                                className="flex-1 bg-primary hover:bg-primary/90"
+                                className="flex-1 bg-primary hover:bg-primary/90 h-8"
                               >
                                 <Save className="w-3 h-3 mr-1" />
                                 저장
@@ -926,7 +1183,7 @@ export function FridgeView() {
                                 onClick={handleCancelEdit}
                                 size="sm"
                                 variant="outline"
-                                className="flex-1"
+                                className="flex-1 h-8"
                               >
                                 <X className="w-3 h-3 mr-1" />
                                 취소
@@ -934,100 +1191,125 @@ export function FridgeView() {
                             </div>
                           </div>
                         ) : (
-                          <>
-                            {item.desiredConsumptionDate && (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Calendar className="w-4 h-4" />
+                          <div className="flex flex-col mt-auto space-y-2">
+                            {/* 날짜 정보 - 하단 고정 그룹 */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Calendar className="w-3.5 h-3.5 shrink-0" />
                                 <span>
-                                  희망 섭취기간:{" "}
-                                  {new Date(
-                                    item.desiredConsumptionDate
-                                  ).toLocaleDateString("ko-KR")}
+                                  유통기한:{" "}
+                                  {new Date(item.expiryDate).toLocaleDateString(
+                                    "ko-KR",
+                                  )}
                                 </span>
                               </div>
-                            )}
-                            {/* 영양정보 간단 요약 표시 */}
-                            {nutritionData[item.id] && (
-                              <div className="text-xs space-y-1 bg-secondary/50 p-2 rounded mt-2">
-                                <div className="font-semibold">
-                                  영양정보 (100g당)
+                              {item.desiredConsumptionDate && (
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Calendar className="w-3.5 h-3.5 shrink-0" />
+                                  <span>
+                                    희망 섭취기간:{" "}
+                                    {new Date(
+                                      item.desiredConsumptionDate,
+                                    ).toLocaleDateString("ko-KR")}
+                                  </span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-1">
+                              )}
+                            </div>
+
+                            {/* 영양정보 간단 요약 */}
+                            {nutritionData[item.id] && (
+                              <div className="text-[11px] p-2.5 rounded-xl bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/15">
+                                <div className="font-bold text-primary text-[11px] mb-2 flex items-center gap-1">
+                                  <span className="w-1 h-1 rounded-full bg-primary"></span>
+                                  영양정보 (100g)
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                                   {nutritionData[item.id]?.calories !==
                                     null && (
-                                    <div>
-                                      칼로리: {nutritionData[item.id]?.calories}
-                                      kcal
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-muted-foreground">
+                                        칼로리
+                                      </span>
+                                      <span className="font-semibold text-foreground">
+                                        {nutritionData[item.id]?.calories}
+                                        <span className="text-[9px] font-normal text-muted-foreground">
+                                          kcal
+                                        </span>
+                                      </span>
                                     </div>
                                   )}
                                   {nutritionData[item.id]?.protein !== null && (
-                                    <div>
-                                      단백질: {nutritionData[item.id]?.protein}g
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-muted-foreground">
+                                        단백질
+                                      </span>
+                                      <span className="font-semibold text-foreground">
+                                        {nutritionData[item.id]?.protein}
+                                        <span className="text-[9px] font-normal text-muted-foreground">
+                                          g
+                                        </span>
+                                      </span>
                                     </div>
                                   )}
                                   {nutritionData[item.id]?.fat !== null && (
-                                    <div>
-                                      지방: {nutritionData[item.id]?.fat}g
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-muted-foreground">
+                                        지방
+                                      </span>
+                                      <span className="font-semibold text-foreground">
+                                        {nutritionData[item.id]?.fat}
+                                        <span className="text-[9px] font-normal text-muted-foreground">
+                                          g
+                                        </span>
+                                      </span>
                                     </div>
                                   )}
                                   {nutritionData[item.id]?.carbohydrate !==
                                     null && (
-                                    <div>
-                                      탄수화물:{" "}
-                                      {nutritionData[item.id]?.carbohydrate}g
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-muted-foreground">
+                                        탄수화물
+                                      </span>
+                                      <span className="font-semibold text-foreground">
+                                        {nutritionData[item.id]?.carbohydrate}
+                                        <span className="text-[9px] font-normal text-muted-foreground">
+                                          g
+                                        </span>
+                                      </span>
                                     </div>
                                   )}
                                 </div>
                               </div>
                             )}
-                          </>
-                        )}
 
-                        {editingItemId !== item.id && (
-                          <div className="flex gap-2 pt-2">
-                            <motion.div
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                            >
+                            {/* 하단 버튼 영역 */}
+                            <div className="flex gap-2 pt-3 border-t border-border/40">
                               <Button
                                 onClick={() => handleStartEdit(item)}
                                 variant="outline"
                                 size="sm"
-                                className="border-primary/30 text-primary hover:bg-primary/10"
+                                className="border-primary/40 text-primary hover:bg-primary/10 h-8 text-xs px-3 rounded-lg"
                               >
                                 <Edit2 className="w-3 h-3 mr-1" />
                                 수정
                               </Button>
-                            </motion.div>
-                            <motion.div
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              className="flex-1"
-                            >
                               <Button
                                 onClick={() => handleConsumeItem(item.id)}
-                                variant="outline"
                                 size="sm"
-                                className="w-full border-primary/30 text-primary hover:bg-primary/10"
+                                className="flex-1 bg-primary/10 text-primary hover:bg-primary/20 h-8 text-xs font-semibold rounded-lg"
                               >
                                 소비 완료
                               </Button>
-                            </motion.div>
-                            <motion.div
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              className="flex-1"
-                            >
                               <Button
                                 onClick={() => handleDeleteItem(item.id)}
                                 variant="outline"
                                 size="sm"
-                                className="w-full border-red-300 text-red-600 hover:bg-red-50"
+                                className="border-red-300 text-red-500 hover:bg-red-50 hover:text-red-600 h-8 text-xs px-3 rounded-lg"
                               >
                                 <Trash2 className="w-3 h-3 mr-1" />
                                 삭제
                               </Button>
-                            </motion.div>
+                            </div>
                           </div>
                         )}
                       </CardContent>
@@ -1041,23 +1323,88 @@ export function FridgeView() {
 
       {/* Warning Message for Expiring Items */}
       {fridgeItems.some(
-        (item) => item.dDay <= 3 && item.status === "stored"
+        (item) => item.dDay <= 3 && item.status === "stored",
       ) && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-lg bg-red-50 border-2 border-red-200 flex items-start gap-3"
+          className="p-4 rounded-xl bg-gradient-to-r from-red-50 to-red-100/50 border border-red-200/60 flex items-start gap-3 shadow-sm"
         >
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="p-1.5 rounded-lg bg-red-100">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+          </div>
           <div>
-            <h4 className="font-semibold text-red-900">유통기한 임박 알림</h4>
-            <p className="text-sm text-red-700 mt-1">
+            <h4 className="font-bold text-sm text-red-900">
+              유통기한 임박 알림
+            </h4>
+            <p className="text-xs text-red-700 mt-0.5">
               유통기한이 3일 이내인 고기가 있습니다. 빠른 시일 내에
               소비해주세요!
             </p>
           </div>
         </motion.div>
       )}
+
+      {/* 냉장고 기반 레시피 추천 모달 */}
+      <LLMRecipeModal
+        open={showFridgeRecipeModal}
+        onOpenChange={setShowFridgeRecipeModal}
+        source="fridge_random"
+      />
+
+      {/* 삭제 확인 다이얼로그 */}
+      <AlertDialog
+        open={deleteConfirmId !== null}
+        onOpenChange={(open) => !open && setDeleteConfirmId(null)}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-primary">
+              고기 삭제
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              이 고기를 냉장고에서 삭제하시겠습니까? 삭제된 항목은 복구할 수
+              없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmDelete}
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 소비 완료 확인 다이얼로그 */}
+      <AlertDialog
+        open={consumeConfirmId !== null}
+        onOpenChange={(open) => !open && setConsumeConfirmId(null)}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-primary">
+              소비 완료
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              이 고기를 소비 완료 처리하시겠습니까? 완료 후 냉장고 목록에서
+              제거됩니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={handleConfirmConsume}
+            >
+              소비 완료
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

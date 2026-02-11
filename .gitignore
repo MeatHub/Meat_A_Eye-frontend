@@ -128,3 +128,5 @@ storybook-static/
 
 # Sentry
 .sentryclirc
+
+icon_data/

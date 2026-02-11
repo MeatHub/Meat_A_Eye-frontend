@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { TrendingUp, Beef, BookOpen, AlertCircle } from "lucide-react";
+import { TrendingUp, Beef, BookOpen, AlertCircle, Ham } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -93,6 +93,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   const [loading, setLoading] = useState(true);
   const [priceLoading, setPriceLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [priceInitialLoading, setPriceInitialLoading] = useState(true); // 가격 섹션 초기 로딩 (지연)
   const [monthlyApiConnected, setMonthlyApiConnected] = useState<
     boolean | null
   >(null);
@@ -104,8 +105,13 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   const [selectedGrade, setSelectedGrade] = useState("00"); // 00 = 전체 평균
 
   useEffect(() => {
-    // 초기 로드: 전체 평균으로 기본 부위들만 조회
-    loadDashboardData();
+    // 초기 로드: 냉장고 데이터만 먼저 빠르게 로드
+    loadFridgeDataOnly();
+    // 가격 데이터는 지연 로드 (500ms 후)
+    const timer = setTimeout(() => {
+      loadInitialPriceData();
+    }, 300);
+    return () => clearTimeout(timer);
   }, []);
 
   // 가격·이력은 "조회" 버튼 클릭 시에만 재조회 (카테고리/등급 변경 시 자동 로딩 없음)
@@ -120,7 +126,11 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
       setSelectedPart("전체");
     }
     // 수입 소고기나 돼지 선택 시 등급을 "00"으로 강제 설정
-    if (category === "돼지" || category === "수입 돼지고기" || category === "수입 소고기") {
+    if (
+      category === "돼지" ||
+      category === "수입 돼지고기" ||
+      category === "수입 소고기"
+    ) {
       setSelectedGrade("00");
     } else {
       setSelectedGrade("00");
@@ -131,7 +141,10 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   const handlePartChange = (part: string) => {
     setSelectedPart(part);
     // 돼지 또는 수입 돼지고기 부위 선택 시 등급을 자동으로 전체 평균으로 변경
-    if (part !== "전체" && (part.startsWith("Pork_") || part.startsWith("Import_Pork_"))) {
+    if (
+      part !== "전체" &&
+      (part.startsWith("Pork_") || part.startsWith("Import_Pork_"))
+    ) {
       setSelectedGrade("00");
     }
   };
@@ -183,39 +196,72 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     return { beef: [], pork: [] };
   };
 
-  const loadDashboardData = async () => {
-    setLoading(true);
+  // 냉장고 데이터만 먼저 빠르게 로드
+  const loadFridgeDataOnly = async () => {
+    try {
+      const fridgeResponse = await getFridgeItems();
+      setFridgeItems(
+        fridgeResponse.items.filter((item) => item.status === "stored"),
+      );
+    } catch (error: any) {
+      console.error("Failed to load fridge data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 가격 데이터 지연 로드 (백그라운드)
+  const loadInitialPriceData = async () => {
+    setPriceInitialLoading(true);
     try {
       const partName = getPartName();
-      
-      // "전체" 선택 시: 냉장고 + 모든 부위 가격/이력을 병렬로 한 번에 요청
       let pricesResponse: DashboardPricesResponse = { beef: [], pork: [] };
       let historyResponse: PriceHistoryResponse = { beef: [], pork: [] };
-      
+
       if (partName === undefined) {
         const defaultParts = getDefaultPartsForCategory();
         const beefPromises = defaultParts.beef.map((beefPart) =>
           Promise.all([
-            getDashboardPrices(selectedRegion, beefPart, undefined, selectedGrade).catch(() => ({ beef: [] as PriceItem[], pork: [] })),
-            getDashboardPriceHistory(selectedRegion, beefPart, undefined, selectedGrade, 6).catch(() => ({ beef: [] as PriceHistoryPoint[], pork: [] })),
-          ])
+            getDashboardPrices(
+              selectedRegion,
+              beefPart,
+              undefined,
+              selectedGrade,
+            ).catch(() => ({ beef: [] as PriceItem[], pork: [] })),
+            getDashboardPriceHistory(
+              selectedRegion,
+              beefPart,
+              undefined,
+              selectedGrade,
+              6,
+            ).catch(() => ({ beef: [] as PriceHistoryPoint[], pork: [] })),
+          ]),
         );
         const porkPromises = defaultParts.pork.map((porkPart) =>
           Promise.all([
-            getDashboardPrices(selectedRegion, undefined, porkPart, selectedGrade).catch(() => ({ beef: [], pork: [] as PriceItem[] })),
-            getDashboardPriceHistory(selectedRegion, undefined, porkPart, selectedGrade, 6).catch(() => ({ beef: [], pork: [] as PriceHistoryPoint[] })),
-          ])
+            getDashboardPrices(
+              selectedRegion,
+              undefined,
+              porkPart,
+              selectedGrade,
+            ).catch(() => ({ beef: [], pork: [] as PriceItem[] })),
+            getDashboardPriceHistory(
+              selectedRegion,
+              undefined,
+              porkPart,
+              selectedGrade,
+              6,
+            ).catch(() => ({ beef: [], pork: [] as PriceHistoryPoint[] })),
+          ]),
         );
-        const allPromises = [
-          getFridgeItems(),
-          ...beefPromises,
-          ...porkPromises,
-        ];
-        const results = await Promise.all(allPromises);
-        const fridgeResponse = results[0] as Awaited<ReturnType<typeof getFridgeItems>>;
-        const beefResults = results.slice(1, 1 + defaultParts.beef.length) as Array<[DashboardPricesResponse, PriceHistoryResponse]>;
-        const porkResults = results.slice(1 + defaultParts.beef.length) as Array<[DashboardPricesResponse, PriceHistoryResponse]>;
-        
+        const results = await Promise.all([...beefPromises, ...porkPromises]);
+        const beefResults = results.slice(0, defaultParts.beef.length) as Array<
+          [DashboardPricesResponse, PriceHistoryResponse]
+        >;
+        const porkResults = results.slice(defaultParts.beef.length) as Array<
+          [DashboardPricesResponse, PriceHistoryResponse]
+        >;
+
         pricesResponse = {
           beef: beefResults.flatMap(([p]) => p.beef),
           pork: porkResults.flatMap(([p]) => p.pork),
@@ -224,8 +270,125 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
           beef: beefResults.flatMap(([, h]) => h.beef),
           pork: porkResults.flatMap(([, h]) => h.pork),
         };
-        
-        setFridgeItems(fridgeResponse.items.filter((item) => item.status === "stored"));
+      } else {
+        const [pricesRes, historyRes] = await Promise.all([
+          getDashboardPrices(
+            selectedRegion,
+            partName &&
+              (partName.startsWith("Beef_") ||
+                partName.startsWith("Import_Beef_"))
+              ? partName
+              : undefined,
+            partName &&
+              (partName.startsWith("Pork_") ||
+                partName.startsWith("Import_Pork_"))
+              ? partName
+              : undefined,
+            selectedGrade,
+          ).catch((): DashboardPricesResponse => ({ beef: [], pork: [] })),
+          getDashboardPriceHistory(
+            selectedRegion,
+            partName &&
+              (partName.startsWith("Beef_") ||
+                partName.startsWith("Import_Beef_"))
+              ? partName
+              : undefined,
+            partName &&
+              (partName.startsWith("Pork_") ||
+                partName.startsWith("Import_Pork_"))
+              ? partName
+              : undefined,
+            selectedGrade,
+            6,
+          ).catch((): PriceHistoryResponse => ({ beef: [], pork: [] })),
+        ]);
+        pricesResponse = pricesRes;
+        historyResponse = historyRes;
+      }
+
+      setPriceData(pricesResponse);
+      setPriceHistory(historyResponse);
+    } catch (error: any) {
+      console.error("Failed to load initial price data:", error);
+    } finally {
+      setPriceInitialLoading(false);
+    }
+  };
+
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      const partName = getPartName();
+
+      // "전체" 선택 시: 냉장고 + 모든 부위 가격/이력을 병렬로 한 번에 요청
+      let pricesResponse: DashboardPricesResponse = { beef: [], pork: [] };
+      let historyResponse: PriceHistoryResponse = { beef: [], pork: [] };
+
+      if (partName === undefined) {
+        const defaultParts = getDefaultPartsForCategory();
+        const beefPromises = defaultParts.beef.map((beefPart) =>
+          Promise.all([
+            getDashboardPrices(
+              selectedRegion,
+              beefPart,
+              undefined,
+              selectedGrade,
+            ).catch(() => ({ beef: [] as PriceItem[], pork: [] })),
+            getDashboardPriceHistory(
+              selectedRegion,
+              beefPart,
+              undefined,
+              selectedGrade,
+              6,
+            ).catch(() => ({ beef: [] as PriceHistoryPoint[], pork: [] })),
+          ]),
+        );
+        const porkPromises = defaultParts.pork.map((porkPart) =>
+          Promise.all([
+            getDashboardPrices(
+              selectedRegion,
+              undefined,
+              porkPart,
+              selectedGrade,
+            ).catch(() => ({ beef: [], pork: [] as PriceItem[] })),
+            getDashboardPriceHistory(
+              selectedRegion,
+              undefined,
+              porkPart,
+              selectedGrade,
+              6,
+            ).catch(() => ({ beef: [], pork: [] as PriceHistoryPoint[] })),
+          ]),
+        );
+        const allPromises = [
+          getFridgeItems(),
+          ...beefPromises,
+          ...porkPromises,
+        ];
+        const results = await Promise.all(allPromises);
+        const fridgeResponse = results[0] as Awaited<
+          ReturnType<typeof getFridgeItems>
+        >;
+        const beefResults = results.slice(
+          1,
+          1 + defaultParts.beef.length,
+        ) as Array<[DashboardPricesResponse, PriceHistoryResponse]>;
+        const porkResults = results.slice(
+          1 + defaultParts.beef.length,
+        ) as Array<[DashboardPricesResponse, PriceHistoryResponse]>;
+
+        pricesResponse = {
+          beef: beefResults.flatMap(([p]) => p.beef),
+          pork: porkResults.flatMap(([p]) => p.pork),
+        };
+        historyResponse = {
+          beef: beefResults.flatMap(([, h]) => h.beef),
+          pork: porkResults.flatMap(([, h]) => h.pork),
+        };
+
+        setFridgeItems(
+          fridgeResponse.items.filter((item) => item.status === "stored"),
+        );
         setPriceData(pricesResponse);
         setPriceHistory(historyResponse);
       } else {
@@ -233,27 +396,37 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
           getFridgeItems(),
           getDashboardPrices(
             selectedRegion,
-            partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
+            partName &&
+              (partName.startsWith("Beef_") ||
+                partName.startsWith("Import_Beef_"))
               ? partName
               : undefined,
-            partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
-              ? partName
-              : undefined,
-            selectedGrade
-          ).catch((): DashboardPricesResponse => ({ beef: [], pork: [] })),
-          getDashboardPriceHistory(
-            selectedRegion,
-            partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
-              ? partName
-              : undefined,
-            partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
+            partName &&
+              (partName.startsWith("Pork_") ||
+                partName.startsWith("Import_Pork_"))
               ? partName
               : undefined,
             selectedGrade,
-            6
+          ).catch((): DashboardPricesResponse => ({ beef: [], pork: [] })),
+          getDashboardPriceHistory(
+            selectedRegion,
+            partName &&
+              (partName.startsWith("Beef_") ||
+                partName.startsWith("Import_Beef_"))
+              ? partName
+              : undefined,
+            partName &&
+              (partName.startsWith("Pork_") ||
+                partName.startsWith("Import_Pork_"))
+              ? partName
+              : undefined,
+            selectedGrade,
+            6,
           ).catch((): PriceHistoryResponse => ({ beef: [], pork: [] })),
         ]);
-        setFridgeItems(fridgeResponse.items.filter((item) => item.status === "stored"));
+        setFridgeItems(
+          fridgeResponse.items.filter((item) => item.status === "stored"),
+        );
         setPriceData(pricesRes);
         setPriceHistory(historyRes);
       }
@@ -273,18 +446,33 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     setPriceLoading(true);
     try {
       const partName = getPartName();
-      
+
       if (partName === undefined) {
         const defaultParts = getDefaultPartsForCategory();
         const beefPromises = defaultParts.beef.map((beefPart) =>
-          getDashboardPrices(selectedRegion, beefPart, undefined, selectedGrade).catch(() => ({ beef: [], pork: [] }))
+          getDashboardPrices(
+            selectedRegion,
+            beefPart,
+            undefined,
+            selectedGrade,
+          ).catch(() => ({ beef: [], pork: [] })),
         );
         const porkPromises = defaultParts.pork.map((porkPart) =>
-          getDashboardPrices(selectedRegion, undefined, porkPart, selectedGrade).catch(() => ({ beef: [], pork: [] }))
+          getDashboardPrices(
+            selectedRegion,
+            undefined,
+            porkPart,
+            selectedGrade,
+          ).catch(() => ({ beef: [], pork: [] })),
         );
         const results = await Promise.all([...beefPromises, ...porkPromises]);
-        const beefResults = results.slice(0, defaultParts.beef.length) as DashboardPricesResponse[];
-        const porkResults = results.slice(defaultParts.beef.length) as DashboardPricesResponse[];
+        const beefResults = results.slice(
+          0,
+          defaultParts.beef.length,
+        ) as DashboardPricesResponse[];
+        const porkResults = results.slice(
+          defaultParts.beef.length,
+        ) as DashboardPricesResponse[];
         setPriceData({
           beef: beefResults.flatMap((r) => r.beef),
           pork: porkResults.flatMap((r) => r.pork),
@@ -293,13 +481,17 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
         // 특정 부위 선택 시: 해당 부위만 조회
         const pricesResponse = await getDashboardPrices(
           selectedRegion,
-          partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
+          partName &&
+            (partName.startsWith("Beef_") ||
+              partName.startsWith("Import_Beef_"))
             ? partName
             : undefined,
-          partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
+          partName &&
+            (partName.startsWith("Pork_") ||
+              partName.startsWith("Import_Pork_"))
             ? partName
             : undefined,
-          selectedGrade
+          selectedGrade,
         );
         setPriceData(pricesResponse);
       }
@@ -320,18 +512,35 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     setHistoryLoading(true);
     try {
       const partName = getPartName();
-      
+
       if (partName === undefined) {
         const defaultParts = getDefaultPartsForCategory();
         const beefPromises = defaultParts.beef.map((beefPart) =>
-          getDashboardPriceHistory(selectedRegion, beefPart, undefined, selectedGrade, 6).catch(() => ({ beef: [], pork: [] }))
+          getDashboardPriceHistory(
+            selectedRegion,
+            beefPart,
+            undefined,
+            selectedGrade,
+            6,
+          ).catch(() => ({ beef: [], pork: [] })),
         );
         const porkPromises = defaultParts.pork.map((porkPart) =>
-          getDashboardPriceHistory(selectedRegion, undefined, porkPart, selectedGrade, 6).catch(() => ({ beef: [], pork: [] }))
+          getDashboardPriceHistory(
+            selectedRegion,
+            undefined,
+            porkPart,
+            selectedGrade,
+            6,
+          ).catch(() => ({ beef: [], pork: [] })),
         );
         const results = await Promise.all([...beefPromises, ...porkPromises]);
-        const beefResults = results.slice(0, defaultParts.beef.length) as PriceHistoryResponse[];
-        const porkResults = results.slice(defaultParts.beef.length) as PriceHistoryResponse[];
+        const beefResults = results.slice(
+          0,
+          defaultParts.beef.length,
+        ) as PriceHistoryResponse[];
+        const porkResults = results.slice(
+          defaultParts.beef.length,
+        ) as PriceHistoryResponse[];
         const res = {
           beef: beefResults.flatMap((r) => r.beef),
           pork: porkResults.flatMap((r) => r.pork),
@@ -341,14 +550,18 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
         // 특정 부위 선택 시: 해당 부위만 조회
         const res = await getDashboardPriceHistory(
           selectedRegion,
-          partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
+          partName &&
+            (partName.startsWith("Beef_") ||
+              partName.startsWith("Import_Beef_"))
             ? partName
             : undefined,
-          partName && (partName.startsWith("Pork_") || partName.startsWith("Import_Pork_"))
+          partName &&
+            (partName.startsWith("Pork_") ||
+              partName.startsWith("Import_Pork_"))
             ? partName
             : undefined,
           selectedGrade,
-          6 // 최근 6주
+          6, // 최근 6주
         );
         console.log("가격 이력 조회 응답:", res);
         console.log("주별 가격 이력 로드 성공:", {
@@ -372,7 +585,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
       setPriceHistory({ beef: [], pork: [] });
       toast({
         title: "주별 가격 이력 조회 실패",
-        description: error.message || "주별 가격 데이터를 불러오는데 실패했습니다.",
+        description:
+          error.message || "주별 가격 데이터를 불러오는데 실패했습니다.",
         variant: "destructive",
         duration: 4000,
       });
@@ -385,11 +599,14 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   const sortedFridgeItems = [...fridgeItems].sort((a, b) => a.dDay - b.dDay);
 
   // Prepare chart data for meat parts distribution
-  const meatPartsData = fridgeItems.reduce((acc, item) => {
-    const part = item.name;
-    acc[part] = (acc[part] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const meatPartsData = fridgeItems.reduce(
+    (acc, item) => {
+      const part = item.name;
+      acc[part] = (acc[part] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 
   const pieData = Object.entries(meatPartsData).map(([name, value]) => ({
     name: getPartDisplayName(name),
@@ -410,19 +627,19 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     // 백엔드에서 이미 날짜 순서대로 정렬되어 있으므로, 순서를 유지하면서 주 목록 추출
     const allWeeksMap = new Map<string, number>(); // week -> 최초 등장 순서
     let order = 0;
-    
+
     // 소고기와 돼지고기 데이터를 순서대로 순회하면서 주 목록 생성
     [...priceHistory.beef, ...priceHistory.pork].forEach((p) => {
       if (!allWeeksMap.has(p.week)) {
         allWeeksMap.set(p.week, order++);
       }
     });
-    
+
     // 등장 순서대로 정렬 (백엔드에서 이미 정렬되어 있음)
     const weeksSorted = Array.from(allWeeksMap.entries())
       .sort((a, b) => a[1] - b[1])
       .map(([week]) => week);
-    
+
     return weeksSorted.map((week) => {
       const row: Record<string, string | number> = { week };
       priceHistory.beef
@@ -498,7 +715,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     if (sortedDates.length === 0) return null;
 
     const latestDate = sortedDates[0];
-    
+
     // 가장 최근 날짜 표시
     return latestDate.toLocaleDateString("ko-KR", {
       year: "numeric",
@@ -531,9 +748,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
       { value: "Import_Beef_Rib_AU", label: "갈비 - 호주산" },
       { value: "Import_Beef_Ribeye_AU", label: "갈비살 - 호주산" },
     ],
-    "수입 돼지고기": [
-      { value: "Import_Pork_Belly", label: "삼겹살" },
-    ],
+    "수입 돼지고기": [{ value: "Import_Pork_Belly", label: "삼겹살" }],
   };
 
   // 부류별 등급 옵션 정의
@@ -544,16 +759,12 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
       { value: "02", label: "1+등급" },
       { value: "03", label: "1등급" },
     ],
-    돼지: [
-      { value: "00", label: "전체" },
-    ],
+    돼지: [{ value: "00", label: "전체" }],
     "수입 소고기": [
       { value: "00", label: "전체" },
       { value: "82", label: "호주산" },
     ],
-    "수입 돼지고기": [
-      { value: "00", label: "전체" },
-    ],
+    "수입 돼지고기": [{ value: "00", label: "전체" }],
   };
 
   // 지역 옵션 정의 (apis.py의 REGION_CODE_MAP과 동일)
@@ -593,7 +804,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
   const currentPartOptions = categoryOptions[selectedCategory] || [];
   // 현재 부류에 맞는 등급 옵션
   const currentGradeOptions = gradeOptions[selectedCategory] || [];
-  
+
   // 등급/원산지 라벨 결정 (수입 소고기는 "원산지", 나머지는 "등급")
   const getGradeLabel = () => {
     if (selectedCategory === "수입 소고기") {
@@ -601,7 +812,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     }
     return "등급";
   };
-  
+
   // 등급 Select가 비활성화되어야 하는지 확인
   const isGradeDisabled = () => {
     return (
@@ -615,7 +826,9 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
 
   // 수입 소고기/수입 돼지고기 선택 시 등급/원산지 카테고리 숨기기
   const shouldHideGradeCategory = () => {
-    return selectedCategory === "수입 소고기" || selectedCategory === "수입 돼지고기";
+    return (
+      selectedCategory === "수입 소고기" || selectedCategory === "수입 돼지고기"
+    );
   };
 
   return (
@@ -655,7 +868,9 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
           </CardHeader>
           <CardContent className="space-y-4 sm:space-y-6 px-3 sm:px-6">
             {/* 카테고리바 - 트렌디한 디자인 */}
-            <div className={`grid grid-cols-1 sm:grid-cols-2 ${shouldHideGradeCategory() ? 'xl:grid-cols-4' : 'xl:grid-cols-5'} gap-3 sm:gap-4 p-4 sm:p-5 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 rounded-2xl border-2 border-primary/20 shadow-lg backdrop-blur-sm`}>
+            <div
+              className={`grid grid-cols-1 sm:grid-cols-2 ${shouldHideGradeCategory() ? "xl:grid-cols-4" : "xl:grid-cols-5"} gap-3 sm:gap-4 p-4 sm:p-5 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 rounded-2xl border-2 border-primary/20 shadow-lg backdrop-blur-sm`}
+            >
               {/* 지역 선택 */}
               <div className="space-y-2 min-w-0">
                 <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
@@ -776,12 +991,28 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
             </div>
 
             {/* 가격 정보 표시 - 트렌디한 디자인 */}
-            {priceLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <div className="text-center space-y-3">
-                  <div className="animate-spin rounded-full h-10 w-10 border-3 border-primary border-t-transparent mx-auto"></div>
+            {priceLoading || priceInitialLoading ? (
+              <div className="space-y-4 animate-pulse">
+                <div className="p-6 rounded-2xl bg-gradient-to-br from-red-50/40 to-red-100/20 border border-red-200/30">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-red-200/50"></div>
+                    <div className="h-5 w-20 rounded bg-red-200/50"></div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="p-4 rounded-xl bg-background/60 border border-red-200/20"
+                      >
+                        <div className="h-4 w-24 rounded bg-muted/60 mb-2"></div>
+                        <div className="h-5 w-20 rounded bg-muted/40"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-center py-4">
                   <p className="text-sm font-medium text-muted-foreground">
-                    가격 정보를 불러오는 중...
+                    시세 정보를 불러오는 중...
                   </p>
                 </div>
               </div>
@@ -823,7 +1054,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                                     {
                                       month: "short",
                                       day: "numeric",
-                                    }
+                                    },
                                   )}
                                 </span>
                               )}
@@ -866,7 +1097,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                     <div className="flex items-center justify-between mb-5 pb-3 border-b-2 border-pink-200/50">
                       <h4 className="text-lg font-bold text-foreground flex items-center gap-3">
                         <div className="p-2 rounded-xl bg-pink-500/20">
-                          <Beef className="w-5 h-5 text-pink-600" />
+                          <Ham className="w-5 h-5 text-pink-600" />
                         </div>
                         돼지고기
                       </h4>
@@ -890,7 +1121,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                                     {
                                       month: "short",
                                       day: "numeric",
-                                    }
+                                    },
                                   )}
                                 </span>
                               )}
@@ -911,7 +1142,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                       </div>
                     ) : (
                       <div className="text-center py-12 text-muted-foreground">
-                        <Beef className="w-16 h-16 mx-auto mb-3 opacity-30" />
+                        <Ham className="w-16 h-16 mx-auto mb-3 opacity-30" />
                         <p className="text-sm font-medium">
                           돼지고기 가격 정보가 없습니다
                         </p>
@@ -956,14 +1187,19 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                         주별 가격 데이터가 없습니다.
                       </p>
                       <p className="text-xs text-muted-foreground/70">
-                        {priceHistory.beef.length === 0 && priceHistory.pork.length === 0
+                        {priceHistory.beef.length === 0 &&
+                        priceHistory.pork.length === 0
                           ? "선택한 조건에 해당하는 데이터가 없거나 API 연결에 문제가 있을 수 있습니다."
                           : `소고기: ${priceHistory.beef.length}개, 돼지고기: ${priceHistory.pork.length}개 데이터`}
                       </p>
                     </div>
                   ) : (
                     <div className="bg-background/50 rounded-xl p-2 sm:p-4 border border-border/50 overflow-x-auto">
-                      <ResponsiveContainer width="100%" height={250} className="min-h-[250px]">
+                      <ResponsiveContainer
+                        width="100%"
+                        height={250}
+                        className="min-h-[250px]"
+                      >
                         <LineChart
                           data={priceChartData}
                           margin={{ top: 12, right: 12, left: 12, bottom: 12 }}
@@ -1068,25 +1304,32 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                       cy="50%"
                       labelLine={false}
                       outerRadius={75}
-                      innerRadius={20}
+                      innerRadius={30}
                       fill="#8884d8"
                       dataKey="value"
-                      label={(entry) => {
-                        // 커스텀 라벨 렌더링으로 글자 잘림 방지
-                        const { name, percent } = entry;
-                        const shortName = name.length > 4 ? name.substring(0, 3) + "..." : name;
+                      label={({
+                        cx,
+                        cy,
+                        midAngle,
+                        outerRadius,
+                        percent,
+                        name,
+                      }) => {
+                        const RADIAN = Math.PI / 180;
+                        const radius = outerRadius + 28;
+                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
                         return (
                           <text
-                            x={entry.x}
-                            y={entry.y}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
+                            x={x}
+                            y={y}
+                            textAnchor={x > cx ? "start" : "end"}
+                            dominantBaseline="central"
                             fontSize={11}
-                            fontWeight="bold"
-                            fill="#fff"
-                            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                            fontWeight={600}
+                            fill="#2D2D2D"
                           >
-                            {`${shortName} ${(percent * 100).toFixed(0)}%`}
+                            {`${name} ${(percent * 100).toFixed(0)}%`}
                           </text>
                         );
                       }}
@@ -1170,11 +1413,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                 {sortedFridgeItems.slice(0, 8).map((item, index) => {
                   const daysLeft = item.dDay;
                   const color =
-                    daysLeft <= 1
-                      ? "red"
-                      : daysLeft <= 3
-                      ? "yellow"
-                      : "green";
+                    daysLeft <= 1 ? "red" : daysLeft <= 3 ? "yellow" : "green";
                   const colorClasses = {
                     red: "border-red-500/70 bg-gradient-to-r from-red-50 to-red-100/50 shadow-red-200/50",
                     yellow:
@@ -1203,8 +1442,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                             color === "red"
                               ? "border-red-500 text-red-700 bg-red-100/50"
                               : color === "yellow"
-                              ? "border-yellow-500 text-yellow-700 bg-yellow-100/50"
-                              : "border-green-500 text-green-700 bg-green-100/50"
+                                ? "border-yellow-500 text-yellow-700 bg-yellow-100/50"
+                                : "border-green-500 text-green-700 bg-green-100/50"
                           }`}
                         >
                           D-{daysLeft}
@@ -1214,7 +1453,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                         <span>
                           유통기한:{" "}
                           {new Date(item.expiryDate).toLocaleDateString(
-                            "ko-KR"
+                            "ko-KR",
                           )}
                         </span>
                         {item.grade && (

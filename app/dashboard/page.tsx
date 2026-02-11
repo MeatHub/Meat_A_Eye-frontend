@@ -6,7 +6,6 @@ import { AlertCircle } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
 import { MobileNav } from "@/components/mobile-nav";
-import { LLMRecipeModal } from "@/components/llm-recipe-modal";
 import { GuestModeModal } from "@/components/guest-mode-modal";
 import { DashboardView } from "@/components/views/dashboard-view";
 import { AnalysisView } from "@/components/views/analysis-view";
@@ -18,7 +17,6 @@ import { getAuthToken, getIsGuest, getGuestNickname } from "@/lib/api";
 
 export default function MeatAEyeDashboard() {
   const [activeMenu, setActiveMenu] = useState("dashboard");
-  const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [guestNickname, setGuestNickname] = useState<string | null>(null);
   const [showEntryGate, setShowEntryGate] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -45,10 +43,6 @@ export default function MeatAEyeDashboard() {
       title: `환영합니다, ${nickname}님! 🎉`,
       description: "Meat-A-Eye에서 즐거운 시간 보내세요.",
     });
-  };
-
-  const handleRandomRecipe = () => {
-    setShowRecipeModal(true);
   };
 
   const handleSaveToFridge = () => {
@@ -107,7 +101,7 @@ export default function MeatAEyeDashboard() {
             exit="exit"
             transition={{ duration: 0.3 }}
           >
-            <RecipeView onOpenLLMRecipe={() => setShowRecipeModal(true)} />
+            <RecipeView />
           </motion.div>
         );
       case "fridge":
@@ -188,16 +182,12 @@ export default function MeatAEyeDashboard() {
 
       <div className="flex">
         {/* Desktop Sidebar */}
-        <AppSidebar
-          activeMenu={activeMenu}
-          onMenuChange={setActiveMenu}
-        />
+        <AppSidebar activeMenu={activeMenu} onMenuChange={setActiveMenu} />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-h-screen">
           {/* Header */}
           <AppHeader
-            onRandomRecipe={handleRandomRecipe}
             activeMenu={activeMenu}
             onMenuChange={setActiveMenu}
             guestNickname={guestNickname || "게스트"}
@@ -212,12 +202,6 @@ export default function MeatAEyeDashboard() {
 
       {/* Mobile Navigation */}
       <MobileNav activeMenu={activeMenu} onMenuChange={setActiveMenu} />
-
-      {/* LLM Recipe Modal */}
-      <LLMRecipeModal
-        open={showRecipeModal}
-        onOpenChange={setShowRecipeModal}
-      />
 
       {/* Toast Notifications */}
       <Toaster />

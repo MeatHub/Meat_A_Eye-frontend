@@ -13,11 +13,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { generateRecipeWithLLM, getFridgeItems, generateRandomRecipeAny, generateRandomRecipeFromFridge, saveRecipe, deleteSavedRecipe } from "@/lib/api";
+import {
+  generateRecipeWithLLM,
+  getFridgeItems,
+  generateRandomRecipeAny,
+  generateRandomRecipeFromFridge,
+  saveRecipe,
+  deleteSavedRecipe,
+} from "@/lib/api";
 import type { FridgeItemResponse } from "@/src/types/api";
 import ReactMarkdown from "react-markdown";
 import { Calendar, Package, Save, Trash2 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { getRandomIcon, guessCategory } from "@/src/lib/icon-matcher";
+import Image from "next/image";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -186,7 +195,16 @@ function formatErrorMessage(err: any): string {
   return messageStr;
 }
 
-export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", initialContent, initialTitle, onRecipeSaved, savedRecipeId, onRecipeDeleted }: LLMRecipeModalProps) {
+export function LLMRecipeModal({
+  open,
+  onOpenChange,
+  source = "fridge_multi",
+  initialContent,
+  initialTitle,
+  onRecipeSaved,
+  savedRecipeId,
+  onRecipeDeleted,
+}: LLMRecipeModalProps) {
   const [loading, setLoading] = useState(false);
   const [recipeMarkdown, setRecipeMarkdown] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -196,6 +214,7 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [recipeTitle, setRecipeTitle] = useState<string>("");
   const [usedMeats, setUsedMeats] = useState<string[]>([]);
+  const [recipeIconUrl, setRecipeIconUrl] = useState<string | null>(null);
 
   // 레시피에서 제목 추출
   const extractRecipeTitle = (markdown: string): string => {
@@ -204,7 +223,10 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
   };
 
   // 레시피에서 사용된 고기 추출
-  const extractUsedMeats = (markdown: string, fridgeItems: FridgeItemResponse[]): string[] => {
+  const extractUsedMeats = (
+    markdown: string,
+    fridgeItems: FridgeItemResponse[],
+  ): string[] => {
     const meats: string[] = [];
     if (source === "fridge_multi" || source === "fridge_random") {
       fridgeItems.forEach((item) => {
@@ -238,7 +260,9 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
       } else if (source === "fridge_random") {
         // 냉장고에서 랜덤 1부위
         const fridgeResponse = await getFridgeItems();
-        storedItems = fridgeResponse.items.filter((item) => item.status === "stored");
+        storedItems = fridgeResponse.items.filter(
+          (item) => item.status === "stored",
+        );
         if (storedItems.length === 0) {
           setError("냉장고에 고기가 없습니다. 먼저 고기를 추가해주세요!");
           setLoading(false);
@@ -250,7 +274,9 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
       } else {
         // fridge_multi: 냉장고 여러 고기로 생성
         const fridgeResponse = await getFridgeItems();
-        storedItems = fridgeResponse.items.filter((item) => item.status === "stored");
+        storedItems = fridgeResponse.items.filter(
+          (item) => item.status === "stored",
+        );
         if (storedItems.length === 0) {
           setError("냉장고에 고기가 없습니다. 먼저 고기를 추가해주세요!");
           setLoading(false);
@@ -263,12 +289,18 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
       // 재료 섹션 전처리
       const processedRecipe = preprocessIngredientsSection(recipe);
       setRecipeMarkdown(processedRecipe);
-      
+
       // 제목과 사용된 고기 추출
       const title = extractRecipeTitle(processedRecipe);
       setRecipeTitle(title);
       const meats = extractUsedMeats(processedRecipe, storedItems);
       setUsedMeats(meats);
+
+      // 랜덤 아이콘
+      const cat = guessCategory(title);
+      getRandomIcon(cat)
+        .then(setRecipeIconUrl)
+        .catch(() => setRecipeIconUrl(null));
     } catch (err: any) {
       console.error("Failed to generate recipes:", err);
       setError(formatErrorMessage(err));
@@ -283,9 +315,16 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
         // 저장된 레시피를 표시하는 경우
         const processedRecipe = preprocessIngredientsSection(initialContent);
         setRecipeMarkdown(processedRecipe);
-        setRecipeTitle(initialTitle || extractRecipeTitle(processedRecipe));
+        const title = initialTitle || extractRecipeTitle(processedRecipe);
+        setRecipeTitle(title);
         setLoading(false);
         setError(null);
+
+        // 랜덤 아이콘
+        const cat = guessCategory(title);
+        getRandomIcon(cat)
+          .then(setRecipeIconUrl)
+          .catch(() => setRecipeIconUrl(null));
       } else {
         // 새 레시피 생성
         generateRecipes();
@@ -297,6 +336,7 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
       setError(null);
       setFridgeItems([]);
       setUsedMeats([]);
+      setRecipeIconUrl(null);
     }
   }, [open, generateRecipes, initialContent, initialTitle]);
 
@@ -458,9 +498,26 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
                       <ReactMarkdown
                         components={{
                           h1: ({ children }) => (
-                            <h1 className="text-2xl font-bold text-primary mb-4">
-                              {children}
-                            </h1>
+                            <>
+                              <h1 className="text-2xl font-bold text-primary mb-4">
+                                {children}
+                              </h1>
+                              {/* 레시피 아이콘: 제목과 재료 사이 */}
+                              {recipeIconUrl && (
+                                <div className="flex justify-center my-5 not-prose">
+                                  <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center shadow-sm">
+                                    <Image
+                                      src={recipeIconUrl}
+                                      alt={recipeTitle || "레시피"}
+                                      width={100}
+                                      height={100}
+                                      className="object-contain drop-shadow-md"
+                                      unoptimized
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           ),
                           h2: ({ children }) => {
                             const text =
@@ -559,15 +616,25 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
                           disabled={deleting}
                           className="flex-1 gap-2"
                         >
-                          {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          {deleting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
                           삭제
                         </Button>
-                        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                        <AlertDialog
+                          open={showDeleteConfirm}
+                          onOpenChange={setShowDeleteConfirm}
+                        >
                           <AlertDialogContent className="sm:max-w-md">
                             <AlertDialogHeader>
-                              <AlertDialogTitle className="text-primary">레시피 삭제</AlertDialogTitle>
+                              <AlertDialogTitle className="text-primary">
+                                레시피 삭제
+                              </AlertDialogTitle>
                               <AlertDialogDescription>
-                                저장 목록에서 이 레시피를 삭제합니다. 삭제된 레시피는 복구할 수 없습니다.
+                                저장 목록에서 이 레시피를 삭제합니다. 삭제된
+                                레시피는 복구할 수 없습니다.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter className="gap-2 sm:gap-0">
@@ -584,7 +651,12 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
                                     onOpenChange(false);
                                     onRecipeDeleted();
                                   } catch (err) {
-                                    toast({ title: "삭제 실패", description: "레시피 삭제에 실패했습니다.", variant: "destructive" });
+                                    toast({
+                                      title: "삭제 실패",
+                                      description:
+                                        "레시피 삭제에 실패했습니다.",
+                                      variant: "destructive",
+                                    });
                                   } finally {
                                     setDeleting(false);
                                   }
@@ -599,7 +671,11 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
                     )}
                     <Button
                       onClick={() => onOpenChange(false)}
-                      className={savedRecipeId != null && onRecipeDeleted ? "flex-1 bg-primary text-primary-foreground hover:bg-primary/90" : "w-full bg-primary text-primary-foreground hover:bg-primary/90"}
+                      className={
+                        savedRecipeId != null && onRecipeDeleted
+                          ? "flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                      }
                     >
                       닫기
                     </Button>
@@ -621,11 +697,15 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
                               title: recipeTitle,
                               content: recipeMarkdown,
                               source: source || "fridge_multi",
-                              used_meats: usedMeats.length > 0 ? JSON.stringify(usedMeats) : null,
+                              used_meats:
+                                usedMeats.length > 0
+                                  ? JSON.stringify(usedMeats)
+                                  : null,
                             });
                             toast({
                               title: "레시피가 저장되었습니다! 📝",
-                              description: "레시피 탐색에서 저장된 레시피를 확인할 수 있습니다.",
+                              description:
+                                "레시피 탐색에서 저장된 레시피를 확인할 수 있습니다.",
                             });
                             // 레시피 목록 업데이트 콜백 호출
                             if (onRecipeSaved) {
