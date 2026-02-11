@@ -31,6 +31,8 @@ export interface Recipe {
   ingredients: string[];
   instructions: string[];
   imageUrl?: string;
+  isBookmarked?: boolean;
+  isPopular?: boolean;
 }
 
 export interface PriceData {

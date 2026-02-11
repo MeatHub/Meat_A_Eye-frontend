@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Clock,
   Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getFridgeItems } from "@/lib/api";
@@ -36,6 +37,27 @@ const meatFacts = [
   "돼지고기는 비타민 B1이 소고기의 10배나 함유되어 있습니다.",
   "양고기의 특유 냄새는 카프릴산 때문이며, 로즈마리로 중화할 수 있습니다.",
   "닭가슴살 100g에는 약 31g의 단백질이 들어있습니다.",
+  "소고기 안심은 지방이 적고 단백질이 풍부해 다이어트에 좋습니다.",
+  "삼겹살은 두께가 1.5cm일 때 구웠을 때 가장 맛있습니다.",
+  "육회는 신선한 한우 등심이나 안심을 사용하는 것이 좋습니다.",
+  "갈비는 미리 소금으로 밑간하면 육즙이 빠져나가므로 굽기 직전에 간을 하세요.",
+  "냉장 고기는 실온에 30분 정도 두어 해동한 뒤 조리하면 맛이 좋습니다.",
+  "한우 1++ 등급은 근내지방도 8 이상, 근육색도·지방색도·조직감·성숙도가 최상입니다.",
+  "돼지 목심은 지방이 적고 담백해 수육이나 찌개에 잘 어울립니다.",
+  "소 양지는 끓는 물에 데친 뒤 조리하면 잡냄새가 줄어듭니다.",
+  "이력제 번호로 소·돼지의 사육·도축·가공 이력을 조회할 수 있습니다.",
+  "고기는 냉장(0~4°C) 보관 시 2~3일, 냉동 시 6~12개월이 권장 유통기한입니다.",
+  "우둔살은 운동량이 많은 부위라 담백하고, 스테이크나 불고기로 좋습니다.",
+  "닭다리는 닭가슴살보다 지방이 많지만 비타민 B군이 풍부합니다.",
+  "소 사태는 장시간 푹 끓이면 부드러운 사태탕이 됩니다.",
+  "돼지 앞다리는 수육·보쌈용으로, 뒷다리는 햄·베이컨 원료로 쓰입니다.",
+  "마블링이 많은 부위는 강한 불로 빠르게 굽는 것이 좋습니다.",
+  "한우 등심은 1cm 두께로 썰어 구우면 미디엄 레어까지 1~2분이면 됩니다.",
+  "삼겹살은 70~75°C 중심온도까지 익히면 기생충 위험이 없습니다.",
+  "소 갈비는 숙성 후 구우면 더 부드럽고 풍미가 좋아집니다.",
+  "돼지고기와 파·마늘을 함께 먹으면 비타민 B1 흡수가 좋아집니다.",
+  "냉동 고기는 냉장실에서 12~24시간 해동하는 것이 육즙 손실이 적습니다.",
+  "소 채끝은 지방이 적어 스테이크보다 볶음·찌개에 많이 씁니다.",
 ];
 
 // 17부위 영문 → 한글 표시 (최근 분석 결과 등)
@@ -171,9 +193,20 @@ export function AppSidebar({
   activeMenu,
   onMenuChange,
 }: AppSidebarProps) {
-  const [factIndex] = useState(() =>
+  const [factIndex, setFactIndex] = useState(() =>
     Math.floor(Math.random() * meatFacts.length)
   );
+
+  const refreshFact = () => {
+    setFactIndex((prev) => {
+      if (meatFacts.length <= 1) return prev;
+      let next = Math.floor(Math.random() * meatFacts.length);
+      while (next === prev && meatFacts.length > 1) {
+        next = Math.floor(Math.random() * meatFacts.length);
+      }
+      return next;
+    });
+  };
 
   return (
     <aside className="hidden lg:flex flex-col w-72 bg-card border-r border-border h-screen sticky top-0">
@@ -230,16 +263,29 @@ export function AppSidebar({
         
         {/* Today's Meat Fact */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          key={factIndex}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ duration: 0.2 }}
           className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-4 border border-primary/20"
         >
-          <div className="flex items-center gap-2 mb-2">
-            <Lightbulb className="w-4 h-4 text-primary" />
-            <span className="text-xs font-semibold text-primary">
-              오늘의 고기 상식
-            </span>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <Lightbulb className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs font-semibold text-primary">
+                오늘의 고기 상식
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={refreshFact}
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+              aria-label="다른 상식 보기"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
             {meatFacts[factIndex]}

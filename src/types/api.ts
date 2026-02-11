@@ -150,10 +150,15 @@ export interface SavedRecipeResponse {
   used_meats: string | null;
   created_at: string;
   updated_at: string;
+  is_bookmarked?: boolean;
 }
 
 export interface RecipeListResponse {
   recipes: SavedRecipeResponse[];
+}
+
+export interface BookmarkedIdsResponse {
+  bookmarked_ids: number[];
 }
 
 export interface MeatInfoByPartNameResponse {

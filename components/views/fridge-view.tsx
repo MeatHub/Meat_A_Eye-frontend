@@ -547,7 +547,7 @@ export function FridgeView() {
         <div>
           <h2 className="text-2xl font-bold text-primary">냉장고 관리</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            보관 중인 고기 {fridgeItems.length}개
+            보관 중인 고기 {fridgeItems.filter((i) => i.status === "stored").length}개
           </p>
         </div>
         <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>

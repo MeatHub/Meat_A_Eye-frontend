@@ -440,17 +440,27 @@ export const getNutritionInfo = async (
   return await apiCall(url);
 };
 
+// 레시피 난이도/시간 추정: content 또는 id 기반으로 다양화
+function inferRecipeMeta(content: string, id: number): { cookingTime: number; difficulty: "초급" | "중급" | "고급" } {
+  const difficulties: Array<"초급" | "중급" | "고급"> = ["초급", "중급", "고급"];
+  let cookingTime = 30;
+  const timeMatch = content.match(/(\d+)\s*분|소요\s*시간\s*[:：]?\s*(\d+)/);
+  if (timeMatch) {
+    const m = timeMatch[1] || timeMatch[2];
+    if (m) cookingTime = Math.min(120, Math.max(10, parseInt(m, 10) || 30));
+  }
+  const hash = (id + content.length) % 3;
+  const difficulty = difficulties[hash];
+  return { cookingTime, difficulty };
+}
+
 // Recipe APIs (Backend) - 저장된 레시피 조회
 export const getRecipes = async (meatType?: string): Promise<Recipe[]> => {
   try {
     const response = await getSavedRecipes();
-    // SavedRecipeResponse를 Recipe 타입으로 변환
     return response.recipes.map((r) => {
-      // 마크다운에서 제목 추출
       const titleMatch = r.content.match(/^#\s+(.+)$/m);
       const title = titleMatch ? titleMatch[1] : r.title;
-      
-      // 마크다운에서 고기 타입 추출 시도
       let meatTypeFromContent = "전체";
       if (r.used_meats) {
         try {
@@ -458,32 +468,28 @@ export const getRecipes = async (meatType?: string): Promise<Recipe[]> => {
           if (Array.isArray(meats) && meats.length > 0) {
             const firstMeat = meats[0];
             if (typeof firstMeat === "string") {
-              if (firstMeat.includes("소") || firstMeat.includes("한우")) {
-                meatTypeFromContent = "소고기";
-              } else if (firstMeat.includes("돼지")) {
-                meatTypeFromContent = "돼지고기";
-              }
+              if (firstMeat.includes("소") || firstMeat.includes("한우")) meatTypeFromContent = "소고기";
+              else if (firstMeat.includes("돼지")) meatTypeFromContent = "돼지고기";
             }
           }
         } catch {
-          // JSON 파싱 실패 시 무시
+          // ignore
         }
       }
-      
-      // 필터링
-      if (meatType && meatType !== "전체" && meatTypeFromContent !== meatType) {
-        return null;
-      }
-      
-      return {
+      if (meatType && meatType !== "전체" && meatTypeFromContent !== meatType) return null;
+      const { cookingTime, difficulty } = inferRecipeMeta(r.content, r.id);
+      const recipe: Recipe = {
         id: String(r.id),
         name: title,
         meatType: meatTypeFromContent,
-        cookingTime: 30, // 기본값
-        difficulty: "중급" as const,
-        ingredients: [],
-        instructions: [],
+        cookingTime,
+        difficulty,
+        ingredients: [] as string[],
+        instructions: [] as string[],
+        isBookmarked: r.is_bookmarked ?? false,
+        isPopular: (r.id + r.title.length) % 3 === 0,
       };
+      return recipe;
     }).filter((r): r is Recipe => r !== null);
   } catch (error) {
     console.error("Failed to load saved recipes:", error);
@@ -558,6 +564,28 @@ export const deleteSavedRecipe = async (recipeId: number): Promise<{ success: bo
   return await apiCall<{ success: boolean; message: string }>(`/api/v1/ai/recipe/saved/${recipeId}`, {
     method: "DELETE",
   });
+};
+
+/** 즐겨찾기한 레시피 ID 목록 */
+export const getBookmarkedRecipeIds = async (): Promise<number[]> => {
+  const res = await apiCall<{ bookmarked_ids: number[] }>("/api/v1/ai/recipe/bookmarks", { method: "GET" });
+  return res.bookmarked_ids ?? [];
+};
+
+/** 레시피 즐겨찾기 추가 */
+export const addRecipeBookmark = async (recipeId: number): Promise<{ success: boolean; message: string }> => {
+  return await apiCall<{ success: boolean; message: string }>(
+    `/api/v1/ai/recipe/saved/${recipeId}/bookmark`,
+    { method: "POST" }
+  );
+};
+
+/** 레시피 즐겨찾기 해제 */
+export const removeRecipeBookmark = async (recipeId: number): Promise<{ success: boolean; message: string }> => {
+  return await apiCall<{ success: boolean; message: string }>(
+    `/api/v1/ai/recipe/saved/${recipeId}/bookmark`,
+    { method: "DELETE" }
+  );
 };
 
 // 묶음번호 여부 (A + 19~29자리 숫자, 백엔드 로직과 일치)

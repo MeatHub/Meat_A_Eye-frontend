@@ -13,11 +13,48 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { generateRecipeWithLLM, getFridgeItems, generateRandomRecipeAny, generateRandomRecipeFromFridge, saveRecipe } from "@/lib/api";
+import { generateRecipeWithLLM, getFridgeItems, generateRandomRecipeAny, generateRandomRecipeFromFridge, saveRecipe, deleteSavedRecipe } from "@/lib/api";
 import type { FridgeItemResponse } from "@/src/types/api";
 import ReactMarkdown from "react-markdown";
-import { Calendar, Package, Save } from "lucide-react";
+import { Calendar, Package, Save, Trash2 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+// 부위 영문 → 한글 (냉장고 재고 표시용)
+const PART_DISPLAY_NAMES: Record<string, string> = {
+  Beef_Tenderloin: "소/안심",
+  Beef_Ribeye: "소/등심",
+  Beef_Sirloin: "소/채끝",
+  Beef_Chuck: "소/목심",
+  Beef_Round: "소/우둔",
+  Beef_BottomRound: "소/설도",
+  Beef_Brisket: "소/양지",
+  Beef_Shank: "소/사태",
+  Beef_Rib: "소/갈비",
+  Beef_Shoulder: "소/앞다리",
+  Pork_Tenderloin: "돼지/안심",
+  Pork_Loin: "돼지/등심",
+  Pork_Neck: "돼지/목심",
+  Pork_PicnicShoulder: "돼지/앞다리",
+  Pork_Ham: "돼지/뒷다리",
+  Pork_Belly: "돼지/삼겹살",
+  Pork_Ribs: "돼지/갈비",
+  Import_Beef_Rib_AU: "수입 소고기/갈비(호주)",
+  Import_Beef_Ribeye_AU: "수입 소고기/갈비살(호주)",
+  Import_Pork_Belly: "수입 돼지고기/삼겹살",
+};
+function getPartDisplayName(name: string): string {
+  return PART_DISPLAY_NAMES[name] ?? name;
+}
 
 interface LLMRecipeModalProps {
   open: boolean;
@@ -26,6 +63,8 @@ interface LLMRecipeModalProps {
   initialContent?: string; // 저장된 레시피를 표시할 때 사용
   initialTitle?: string; // 저장된 레시피 제목
   onRecipeSaved?: () => void; // 레시피 저장 완료 시 호출되는 콜백
+  savedRecipeId?: number; // 저장된 레시피 ID (삭제 시 사용)
+  onRecipeDeleted?: () => void; // 레시피 삭제 완료 시 호출
 }
 
 // 재료 섹션을 정리하는 함수 - 줄 단위로 처리하여 카테고리별로 분리
@@ -147,12 +186,14 @@ function formatErrorMessage(err: any): string {
   return messageStr;
 }
 
-export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", initialContent, initialTitle, onRecipeSaved }: LLMRecipeModalProps) {
+export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", initialContent, initialTitle, onRecipeSaved, savedRecipeId, onRecipeDeleted }: LLMRecipeModalProps) {
   const [loading, setLoading] = useState(false);
   const [recipeMarkdown, setRecipeMarkdown] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [fridgeItems, setFridgeItems] = useState<FridgeItemResponse[]>([]);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [recipeTitle, setRecipeTitle] = useState<string>("");
   const [usedMeats, setUsedMeats] = useState<string[]>([]);
 
@@ -367,7 +408,7 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
                               >
                                 <div className="flex items-start justify-between mb-2">
                                   <h4 className="font-semibold text-base text-foreground">
-                                    {item.name}
+                                    {getPartDisplayName(item.name)}
                                   </h4>
                                   <Badge
                                     variant={
@@ -504,14 +545,61 @@ export function LLMRecipeModal({ open, onOpenChange, source = "fridge_multi", in
 
                 {/* Action Buttons */}
                 {initialContent ? (
-                  // 저장된 레시피를 표시하는 경우 - 닫기 버튼만 표시
+                  // 저장된 레시피를 표시하는 경우 - 닫기 / 삭제
                   <motion.div
+                    className="flex gap-2"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
+                    {savedRecipeId != null && onRecipeDeleted && (
+                      <>
+                        <Button
+                          variant="destructive"
+                          onClick={() => setShowDeleteConfirm(true)}
+                          disabled={deleting}
+                          className="flex-1 gap-2"
+                        >
+                          {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          삭제
+                        </Button>
+                        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                          <AlertDialogContent className="sm:max-w-md">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="text-primary">레시피 삭제</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                저장 목록에서 이 레시피를 삭제합니다. 삭제된 레시피는 복구할 수 없습니다.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="gap-2 sm:gap-0">
+                              <AlertDialogCancel>취소</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  if (savedRecipeId == null) return;
+                                  setDeleting(true);
+                                  try {
+                                    await deleteSavedRecipe(savedRecipeId);
+                                    setShowDeleteConfirm(false);
+                                    onOpenChange(false);
+                                    onRecipeDeleted();
+                                  } catch (err) {
+                                    toast({ title: "삭제 실패", description: "레시피 삭제에 실패했습니다.", variant: "destructive" });
+                                  } finally {
+                                    setDeleting(false);
+                                  }
+                                }}
+                              >
+                                삭제
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </>
+                    )}
                     <Button
                       onClick={() => onOpenChange(false)}
-                      className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                      className={savedRecipeId != null && onRecipeDeleted ? "flex-1 bg-primary text-primary-foreground hover:bg-primary/90" : "w-full bg-primary text-primary-foreground hover:bg-primary/90"}
                     >
                       닫기
                     </Button>

@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Clock, ChefHat, Beef, TrendingUp, Wand2, Loader2, Shuffle } from "lucide-react";
+import { Search, Clock, ChefHat, Beef, TrendingUp, Wand2, Shuffle, Star, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -13,13 +14,24 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { getRecipes, getSavedRecipes } from "@/lib/api";
+import { getRecipes, getSavedRecipes, addRecipeBookmark, removeRecipeBookmark, deleteSavedRecipe } from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
-import ReactMarkdown from "react-markdown";
 import type { Recipe } from "@/constants/mockData";
 import { LLMRecipeModal } from "@/components/llm-recipe-modal";
+import { PorkIcon } from "@/components/icons/pork-icon";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-const categories = ["전체", "소고기", "돼지고기"];
+const categories = ["전체", "돼지고기", "소고기"];
+type ViewMode = "all" | "bookmarks";
 
 const getDifficultyColor = (difficulty: string) => {
   switch (difficulty) {
@@ -41,24 +53,27 @@ interface RecipeViewProps {
 export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("전체");
+  const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [allRecipes, setAllRecipes] = useState<Recipe[]>([]); // 전체 레시피 캐시
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAIRandomModal, setShowAIRandomModal] = useState(false);
   const [showFridgeRandomModal, setShowFridgeRandomModal] = useState(false);
   const [showSavedRecipeModal, setShowSavedRecipeModal] = useState(false);
   const [selectedRecipeContent, setSelectedRecipeContent] = useState<string>("");
   const [selectedRecipeTitle, setSelectedRecipeTitle] = useState<string>("");
+  const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
+  const [bookmarkingId, setBookmarkingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmRecipeId, setDeleteConfirmRecipeId] = useState<string | null>(null);
 
-  // 초기 로드만 실행
   useEffect(() => {
     loadAllRecipes();
   }, []);
 
-  // 카테고리 변경 시 필터링만 수행 (로딩 없이)
   useEffect(() => {
     filterRecipes();
-  }, [activeCategory, allRecipes]);
+  }, [activeCategory, viewMode, allRecipes]);
 
   const loadAllRecipes = async () => {
     setLoading(true);
@@ -74,20 +89,71 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
   };
 
   const filterRecipes = () => {
-    if (activeCategory === "전체") {
-      setRecipes(allRecipes);
-    } else {
-      const filtered = allRecipes.filter((recipe) => recipe.meatType === activeCategory);
-      setRecipes(filtered);
+    let list = allRecipes;
+    if (viewMode === "bookmarks") list = list.filter((r) => r.isBookmarked);
+    if (activeCategory !== "전체") list = list.filter((r) => r.meatType === activeCategory);
+    setRecipes(list);
+  };
+
+  const handleToggleBookmark = async (e: React.MouseEvent, recipeId: string, isBookmarked: boolean) => {
+    e.stopPropagation();
+    if (bookmarkingId) return;
+    const id = parseInt(recipeId, 10);
+    const nextBookmarked = !isBookmarked;
+    setBookmarkingId(recipeId);
+    // 낙관적 업데이트: 화면은 즉시 반영
+    setAllRecipes((prev) =>
+      prev.map((r) => (r.id === recipeId ? { ...r, isBookmarked: nextBookmarked } : r))
+    );
+    setRecipes((prev) =>
+      prev.map((r) => (r.id === recipeId ? { ...r, isBookmarked: nextBookmarked } : r))
+    );
+    try {
+      if (isBookmarked) await removeRecipeBookmark(id);
+      else await addRecipeBookmark(id);
+      toast({
+        title: isBookmarked ? "즐겨찾기 해제" : "즐겨찾기 추가",
+        description: isBookmarked ? "즐겨찾기에서 제거되었습니다." : "즐겨찾기에 추가되었습니다.",
+      });
+    } catch (err) {
+      setAllRecipes((prev) =>
+        prev.map((r) => (r.id === recipeId ? { ...r, isBookmarked } : r))
+      );
+      setRecipes((prev) =>
+        prev.map((r) => (r.id === recipeId ? { ...r, isBookmarked } : r))
+      );
+      toast({ title: "오류", description: "즐겨찾기 변경에 실패했습니다.", variant: "destructive" });
+    } finally {
+      setBookmarkingId(null);
+    }
+  };
+
+  const handleDeleteRecipeClick = (e: React.MouseEvent, recipeId: string) => {
+    e.stopPropagation();
+    if (deletingId) return;
+    setDeleteConfirmRecipeId(recipeId);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmRecipeId) return;
+    setDeletingId(deleteConfirmRecipeId);
+    setDeleteConfirmRecipeId(null);
+    try {
+      await deleteSavedRecipe(parseInt(deleteConfirmRecipeId, 10));
+      await loadAllRecipes();
+    } catch (err) {
+      toast({ title: "삭제 실패", description: "레시피 삭제에 실패했습니다.", variant: "destructive" });
+    } finally {
+      setDeletingId(null);
     }
   };
 
   const handleRecipeClick = async (recipeId: string) => {
     try {
-      // 저장된 레시피 전체 정보 가져오기
       const response = await getSavedRecipes();
       const savedRecipe = response.recipes.find((r) => String(r.id) === recipeId);
       if (savedRecipe) {
+        setSelectedRecipeId(recipeId);
         setSelectedRecipeContent(savedRecipe.content);
         setSelectedRecipeTitle(savedRecipe.title);
         setShowSavedRecipeModal(true);
@@ -169,7 +235,27 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
         />
       </div>
 
-      {/* Category Filter */}
+      {/* 1행: 전체 / 즐겨찾기 */}
+      <div className="flex flex-wrap items-center gap-2">
+        {(["all", "bookmarks"] as const).map((mode) => (
+          <motion.button
+            key={mode}
+            onClick={() => setViewMode(mode)}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+              viewMode === mode
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-foreground hover:bg-secondary/80"
+            )}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            {mode === "all" ? "전체" : "즐겨찾기"}
+          </motion.button>
+        ))}
+      </div>
+
+      {/* 2행: 전체 / 돼지고기 / 소고기 */}
       <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
         {categories.map((category) => (
           <motion.button
@@ -200,41 +286,82 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <Card 
+            <Card
               className="bg-card border-primary/20 shadow-md hover:shadow-lg transition-all cursor-pointer"
               onClick={() => handleRecipeClick(recipe.id)}
             >
               <CardContent className="p-4">
                 <div className="flex gap-4">
-                  <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0">
-                    <Beef className="w-8 h-8 text-primary" />
+                  <div className={cn(
+                    "w-20 h-20 rounded-xl flex items-center justify-center shrink-0",
+                    recipe.meatType === "돼지고기"
+                      ? "bg-gradient-to-br from-pink-100 to-pink-50"
+                      : "bg-gradient-to-br from-primary/20 to-primary/10"
+                  )}>
+                    {recipe.meatType === "돼지고기" ? (
+                      <PorkIcon size={32} className="text-pink-600" />
+                    ) : (
+                      <Beef className="w-8 h-8 text-primary" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3 className="font-semibold text-foreground text-lg">
                         {recipe.name}
                       </h3>
-                      <Badge
-                        className={cn(
-                          "text-[10px] shrink-0",
-                          getDifficultyColor(recipe.difficulty)
-                        )}
-                      >
-                        {recipe.difficulty}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleBookmark(e, recipe.id, !!recipe.isBookmarked)}
+                          disabled={bookmarkingId === recipe.id}
+                          className="p-1 rounded-md hover:bg-secondary transition-colors"
+                          aria-label={recipe.isBookmarked ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+                        >
+                          <Star
+                            className={cn(
+                              "w-8 h-8",
+                              recipe.isBookmarked ? "fill-amber-400 text-amber-500" : "text-muted-foreground"
+                            )}
+                          />
+                        </button>
+                        <Badge
+                          className={cn(
+                            "text-[10px]",
+                            getDifficultyColor(recipe.difficulty)
+                          )}
+                        >
+                          {recipe.difficulty}
+                        </Badge>
+                      </div>
                     </div>
                     <p className="text-sm text-muted-foreground mb-3">
                       {recipe.meatType}
                     </p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {recipe.cookingTime}분
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" />
-                        인기
-                      </span>
+                    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {recipe.cookingTime}분
+                        </span>
+                        {recipe.isPopular && (
+                          <span className="flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" />
+                            인기
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e: React.MouseEvent) => handleDeleteRecipeClick(e, recipe.id)}
+                        disabled={deletingId === recipe.id}
+                        className="h-8 px-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                        aria-label="레시피 삭제"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        삭제
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -274,10 +401,40 @@ export function RecipeView({ onOpenLLMRecipe }: RecipeViewProps) {
       {/* 저장된 레시피 상세 보기 모달 */}
       <LLMRecipeModal
         open={showSavedRecipeModal}
-        onOpenChange={setShowSavedRecipeModal}
+        onOpenChange={(open) => {
+          setShowSavedRecipeModal(open);
+          if (!open) setSelectedRecipeId(null);
+        }}
         initialContent={selectedRecipeContent}
         initialTitle={selectedRecipeTitle}
+        savedRecipeId={selectedRecipeId ? parseInt(selectedRecipeId, 10) : undefined}
+        onRecipeDeleted={() => {
+          setShowSavedRecipeModal(false);
+          setSelectedRecipeId(null);
+          loadAllRecipes();
+        }}
       />
+
+      {/* 레시피 삭제 확인 다이얼로그 */}
+      <AlertDialog open={!!deleteConfirmRecipeId} onOpenChange={(open) => !open && setDeleteConfirmRecipeId(null)}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-primary">레시피 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              저장 목록에서 이 레시피를 삭제합니다. 삭제된 레시피는 복구할 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmDelete}
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

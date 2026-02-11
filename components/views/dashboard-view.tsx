@@ -187,53 +187,50 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     setLoading(true);
     try {
       const partName = getPartName();
-      const fridgeResponse = await getFridgeItems();
       
-      // "전체" 선택 시 카테고리별 기본 부위들을 개별적으로 조회
+      // "전체" 선택 시: 냉장고 + 모든 부위 가격/이력을 병렬로 한 번에 요청
       let pricesResponse: DashboardPricesResponse = { beef: [], pork: [] };
       let historyResponse: PriceHistoryResponse = { beef: [], pork: [] };
       
       if (partName === undefined) {
-        // "전체" 선택 시: 카테고리별 기본 부위들을 개별적으로 조회
         const defaultParts = getDefaultPartsForCategory();
-        const allBeefParts: PriceItem[] = [];
-        const allPorkParts: PriceItem[] = [];
-        const allBeefHistory: PriceHistoryPoint[] = [];
-        const allPorkHistory: PriceHistoryPoint[] = [];
+        const beefPromises = defaultParts.beef.map((beefPart) =>
+          Promise.all([
+            getDashboardPrices(selectedRegion, beefPart, undefined, selectedGrade).catch(() => ({ beef: [] as PriceItem[], pork: [] })),
+            getDashboardPriceHistory(selectedRegion, beefPart, undefined, selectedGrade, 6).catch(() => ({ beef: [] as PriceHistoryPoint[], pork: [] })),
+          ])
+        );
+        const porkPromises = defaultParts.pork.map((porkPart) =>
+          Promise.all([
+            getDashboardPrices(selectedRegion, undefined, porkPart, selectedGrade).catch(() => ({ beef: [], pork: [] as PriceItem[] })),
+            getDashboardPriceHistory(selectedRegion, undefined, porkPart, selectedGrade, 6).catch(() => ({ beef: [], pork: [] as PriceHistoryPoint[] })),
+          ])
+        );
+        const allPromises = [
+          getFridgeItems(),
+          ...beefPromises,
+          ...porkPromises,
+        ];
+        const results = await Promise.all(allPromises);
+        const fridgeResponse = results[0] as Awaited<ReturnType<typeof getFridgeItems>>;
+        const beefResults = results.slice(1, 1 + defaultParts.beef.length) as Array<[DashboardPricesResponse, PriceHistoryResponse]>;
+        const porkResults = results.slice(1 + defaultParts.beef.length) as Array<[DashboardPricesResponse, PriceHistoryResponse]>;
         
-        // 소고기 기본 부위들 개별 조회
-        for (const beefPart of defaultParts.beef) {
-          try {
-            const [priceRes, historyRes] = await Promise.all([
-              getDashboardPrices(selectedRegion, beefPart, undefined, selectedGrade).catch(() => ({ beef: [], pork: [] })),
-              getDashboardPriceHistory(selectedRegion, beefPart, undefined, selectedGrade, 6).catch(() => ({ beef: [], pork: [] })),
-            ]);
-            allBeefParts.push(...priceRes.beef);
-            allBeefHistory.push(...historyRes.beef);
-          } catch (error) {
-            console.error(`Failed to load ${beefPart}:`, error);
-          }
-        }
+        pricesResponse = {
+          beef: beefResults.flatMap(([p]) => p.beef),
+          pork: porkResults.flatMap(([p]) => p.pork),
+        };
+        historyResponse = {
+          beef: beefResults.flatMap(([, h]) => h.beef),
+          pork: porkResults.flatMap(([, h]) => h.pork),
+        };
         
-        // 돼지고기 기본 부위들 개별 조회
-        for (const porkPart of defaultParts.pork) {
-          try {
-            const [priceRes, historyRes] = await Promise.all([
-              getDashboardPrices(selectedRegion, undefined, porkPart, selectedGrade).catch(() => ({ beef: [], pork: [] })),
-              getDashboardPriceHistory(selectedRegion, undefined, porkPart, selectedGrade, 6).catch(() => ({ beef: [], pork: [] })),
-            ]);
-            allPorkParts.push(...priceRes.pork);
-            allPorkHistory.push(...historyRes.pork);
-          } catch (error) {
-            console.error(`Failed to load ${porkPart}:`, error);
-          }
-        }
-        
-        pricesResponse = { beef: allBeefParts, pork: allPorkParts };
-        historyResponse = { beef: allBeefHistory, pork: allPorkHistory };
+        setFridgeItems(fridgeResponse.items.filter((item) => item.status === "stored"));
+        setPriceData(pricesResponse);
+        setPriceHistory(historyResponse);
       } else {
-        // 특정 부위 선택 시: 해당 부위만 조회
-        [pricesResponse, historyResponse] = await Promise.all([
+        const [fridgeResponse, pricesRes, historyRes] = await Promise.all([
+          getFridgeItems(),
           getDashboardPrices(
             selectedRegion,
             partName && (partName.startsWith("Beef_") || partName.startsWith("Import_Beef_"))
@@ -256,13 +253,10 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
             6
           ).catch((): PriceHistoryResponse => ({ beef: [], pork: [] })),
         ]);
+        setFridgeItems(fridgeResponse.items.filter((item) => item.status === "stored"));
+        setPriceData(pricesRes);
+        setPriceHistory(historyRes);
       }
-      
-      setFridgeItems(
-        fridgeResponse.items.filter((item) => item.status === "stored")
-      );
-      setPriceData(pricesResponse);
-      setPriceHistory(historyResponse);
     } catch (error: any) {
       console.error("Failed to load dashboard data:", error);
       toast({
@@ -280,43 +274,21 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     try {
       const partName = getPartName();
       
-      // "전체" 선택 시 카테고리별 기본 부위들을 개별적으로 조회
       if (partName === undefined) {
         const defaultParts = getDefaultPartsForCategory();
-        const allBeefParts: any[] = [];
-        const allPorkParts: any[] = [];
-        
-        // 소고기 기본 부위들 개별 조회
-        for (const beefPart of defaultParts.beef) {
-          try {
-            const response = await getDashboardPrices(
-              selectedRegion,
-              beefPart,
-              undefined,
-              selectedGrade
-            );
-            allBeefParts.push(...response.beef);
-          } catch (error) {
-            console.error(`Failed to load ${beefPart}:`, error);
-          }
-        }
-        
-        // 돼지고기 기본 부위들 개별 조회
-        for (const porkPart of defaultParts.pork) {
-          try {
-            const response = await getDashboardPrices(
-              selectedRegion,
-              undefined,
-              porkPart,
-              selectedGrade
-            );
-            allPorkParts.push(...response.pork);
-          } catch (error) {
-            console.error(`Failed to load ${porkPart}:`, error);
-          }
-        }
-        
-        setPriceData({ beef: allBeefParts, pork: allPorkParts });
+        const beefPromises = defaultParts.beef.map((beefPart) =>
+          getDashboardPrices(selectedRegion, beefPart, undefined, selectedGrade).catch(() => ({ beef: [], pork: [] }))
+        );
+        const porkPromises = defaultParts.pork.map((porkPart) =>
+          getDashboardPrices(selectedRegion, undefined, porkPart, selectedGrade).catch(() => ({ beef: [], pork: [] }))
+        );
+        const results = await Promise.all([...beefPromises, ...porkPromises]);
+        const beefResults = results.slice(0, defaultParts.beef.length) as DashboardPricesResponse[];
+        const porkResults = results.slice(defaultParts.beef.length) as DashboardPricesResponse[];
+        setPriceData({
+          beef: beefResults.flatMap((r) => r.beef),
+          pork: porkResults.flatMap((r) => r.pork),
+        });
       } else {
         // 특정 부위 선택 시: 해당 부위만 조회
         const pricesResponse = await getDashboardPrices(
@@ -348,59 +320,22 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     setHistoryLoading(true);
     try {
       const partName = getPartName();
-      console.log("가격 이력 조회 요청:", {
-        region: selectedRegion,
-        part: partName,
-        grade: selectedGrade,
-        category: selectedCategory,
-      });
       
-      // "전체" 선택 시 카테고리별 기본 부위들을 개별적으로 조회
       if (partName === undefined) {
         const defaultParts = getDefaultPartsForCategory();
-        const allBeefHistory: any[] = [];
-        const allPorkHistory: any[] = [];
-        
-        // 소고기 기본 부위들 개별 조회
-        for (const beefPart of defaultParts.beef) {
-          try {
-            const response = await getDashboardPriceHistory(
-              selectedRegion,
-              beefPart,
-              undefined,
-              selectedGrade,
-              6
-            );
-            allBeefHistory.push(...response.beef);
-          } catch (error) {
-            console.error(`Failed to load history for ${beefPart}:`, error);
-          }
-        }
-        
-        // 돼지고기 기본 부위들 개별 조회
-        for (const porkPart of defaultParts.pork) {
-          try {
-            const response = await getDashboardPriceHistory(
-              selectedRegion,
-              undefined,
-              porkPart,
-              selectedGrade,
-              6
-            );
-            allPorkHistory.push(...response.pork);
-          } catch (error) {
-            console.error(`Failed to load history for ${porkPart}:`, error);
-          }
-        }
-        
-        const res = { beef: allBeefHistory, pork: allPorkHistory };
-        console.log("가격 이력 조회 응답:", res);
-        console.log("주별 가격 이력 로드 성공:", {
-          beef: res.beef.length,
-          pork: res.pork.length,
-          beefData: res.beef,
-          porkData: res.pork,
-        });
+        const beefPromises = defaultParts.beef.map((beefPart) =>
+          getDashboardPriceHistory(selectedRegion, beefPart, undefined, selectedGrade, 6).catch(() => ({ beef: [], pork: [] }))
+        );
+        const porkPromises = defaultParts.pork.map((porkPart) =>
+          getDashboardPriceHistory(selectedRegion, undefined, porkPart, selectedGrade, 6).catch(() => ({ beef: [], pork: [] }))
+        );
+        const results = await Promise.all([...beefPromises, ...porkPromises]);
+        const beefResults = results.slice(0, defaultParts.beef.length) as PriceHistoryResponse[];
+        const porkResults = results.slice(defaultParts.beef.length) as PriceHistoryResponse[];
+        const res = {
+          beef: beefResults.flatMap((r) => r.beef),
+          pork: porkResults.flatMap((r) => r.pork),
+        };
         setPriceHistory(res);
       } else {
         // 특정 부위 선택 시: 해당 부위만 조회
