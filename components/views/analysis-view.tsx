@@ -11,9 +11,13 @@ import {
   FileText,
   Sparkles,
   AlertCircle,
+  AlertTriangle,
   ChefHat,
   CheckCircle2,
   Info,
+  Keyboard,
+  RotateCcw,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -391,7 +395,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     }
   }, [ocrFailed]);
 
-  // OCR 성공 시 수입산 이력번호는 자동 조회 실행
+  // OCR 성공 시 자동 조회 실행 (수입산 + 국내산 모두 처리)
   const [autoLookupDone, setAutoLookupDone] = useState(false);
   useEffect(() => {
     if (
@@ -401,6 +405,18 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       !manualTraceLoading
     ) {
       const num = result.traceabilityNumber.trim();
+      // 국내산 묶음번호(L+숫자) → M-Trace 외부 사이트로 바로 이동 (직접 입력과 동일)
+      const isDomesticBundle = /^L\d+$/.test(num);
+      if (isDomesticBundle) {
+        setAutoLookupDone(true);
+        const mtraceUrl = `https://www.mtrace.go.kr/search.do?mtraceNo=${encodeURIComponent(num)}`;
+        window.open(mtraceUrl, "_blank");
+        toast({
+          title: "국내육 이력 조회",
+          description: "국산육 이력 정보는 M-Trace 공식 웹사이트에서 확인할 수 있습니다.",
+        });
+        return;
+      }
       // 수입 묶음번호(A+숫자) 또는 12자리 숫자 이력번호 → 자동 조회
       const isImport = isBundleNumber(num);
       const is12Digit = /^\d{12}$/.test(num);
@@ -737,6 +753,12 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
 
     setAnalyzing(true);
     setError(null);
+    // 새 분석 시작 시 이전 이력 조회 결과 초기화 (국내육 OCR 시 이전 결과가 남는 버그 방지)
+    setManualTraceability(null);
+    setManualTraceabilityList(null);
+    setSelectedTraceDetail(null);
+    setManualTraceError(null);
+    setAutoLookupDone(false);
 
     try {
       // Convert dataUrl to File
@@ -1395,7 +1417,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                                 </span>
                               </>
                             ) : (
-                              "이미지에서 이력번호를 찾지 못했습니다."
+                              "아래에서 이력번호를 직접 입력할 수 있습니다."
                             )
                           ) : (
                             <>
@@ -1411,6 +1433,57 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                     </div>
                   </motion.div>
                 )}
+
+                {/* OCR 인식 실패 시 안내 배너 */}
+                {result &&
+                  mode === "ocr" &&
+                  !result.traceabilityNumber &&
+                  !analyzing && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4 space-y-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" />
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-bold text-yellow-800">
+                            이미지에서 이력번호를 찾지 못했습니다
+                          </h4>
+                          <p className="text-xs text-yellow-700">
+                            아래 방법으로 다시 시도해 보세요:
+                          </p>
+                        </div>
+                      </div>
+                      <ul className="text-xs text-yellow-700 space-y-1.5 ml-8 list-disc">
+                        <li>
+                          이력번호가 선명하게 보이도록 가까이 촬영해 주세요
+                        </li>
+                        <li>빛 반사나 그림자가 없는 환경에서 촬영해 주세요</li>
+                        <li>이미지가 회전되지 않았는지 확인해 주세요</li>
+                      </ul>
+                      <div className="flex flex-col sm:flex-row gap-2 ml-8">
+                        <Button
+                          onClick={reset}
+                          variant="outline"
+                          size="sm"
+                          className="border-yellow-400 text-yellow-800 hover:bg-yellow-100 gap-1.5"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          다시 촬영하기
+                        </Button>
+                        <Button
+                          onClick={() => setShowTraceabilitySection(true)}
+                          variant="outline"
+                          size="sm"
+                          className="border-primary/40 text-primary hover:bg-primary/10 gap-1.5"
+                        >
+                          <Keyboard className="w-3.5 h-3.5" />
+                          이력번호 직접 입력
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
 
                 {/* Analysis Result - 반응형 레이아웃 (OCR 모드는 이력 조회 영역으로 연결) */}
                 {result && mode === "ocr" ? (
@@ -1448,10 +1521,44 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">
-                          이미지에서 이력번호를 찾지 못했습니다. 이력번호가
-                          선명하게 보이도록 다시 촬영해 주세요.
-                        </p>
+                        <div className="space-y-3">
+                          <p className="text-sm text-muted-foreground">
+                            이미지에서 이력번호를 자동으로 인식하지 못했습니다.
+                          </p>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Input
+                              placeholder="이력번호를 직접 입력하세요"
+                              value={traceInput}
+                              onChange={(e) => {
+                                setTraceInput(e.target.value);
+                                setManualTraceError(null);
+                              }}
+                              onKeyDown={(e) =>
+                                e.key === "Enter" && handleTraceabilityLookup()
+                              }
+                              className="font-mono flex-1"
+                            />
+                            <Button
+                              onClick={() => handleTraceabilityLookup()}
+                              disabled={
+                                manualTraceLoading || !traceInput.trim()
+                              }
+                              className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                            >
+                              {manualTraceLoading ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                  조회 중...
+                                </>
+                              ) : (
+                                <>
+                                  <Keyboard className="w-4 h-4 mr-2" />
+                                  이력번호로 조회
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
                       )}
                     </div>
 
@@ -1786,10 +1893,10 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                             이력 정보 (냉장고 연동용)
                           </h4>
                           <TraceabilityDetailSections
-                            info={analysisResponse.traceability}
+                            info={analysisResponse.traceability ?? null}
                             onSaveToFridge={() =>
                               handleSaveTraceabilityToFridge(
-                                analysisResponse.traceability,
+                                analysisResponse.traceability ?? null,
                               )
                             }
                             saving={savingFromTraceability}
@@ -1921,9 +2028,47 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700"
+          className="rounded-lg border-2 border-red-200 bg-red-50 p-4 space-y-3"
         >
-          {error}
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-red-700">
+                {mode === "ocr" ? "이력번호 인식 실패" : "부위 분석 실패"}
+              </h4>
+              <p className="text-xs text-red-600">{error}</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 ml-8">
+            <Button
+              onClick={reset}
+              variant="outline"
+              size="sm"
+              className="border-red-300 text-red-700 hover:bg-red-100 gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              다시 시도
+            </Button>
+            {mode === "ocr" && (
+              <Button
+                onClick={() => {
+                  setError(null);
+                  setShowTraceabilitySection(true);
+                }}
+                variant="outline"
+                size="sm"
+                className="border-primary/40 text-primary hover:bg-primary/10 gap-1.5"
+              >
+                <Keyboard className="w-3.5 h-3.5" />
+                이력번호 직접 입력
+              </Button>
+            )}
+          </div>
+          {mode !== "ocr" && (
+            <p className="text-[11px] text-red-500/70 ml-8">
+              💡 이미지가 선명한지, 고기 부위가 잘 보이는지 확인해 주세요.
+            </p>
+          )}
         </motion.div>
       )}
 
