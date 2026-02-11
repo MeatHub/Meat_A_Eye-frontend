@@ -12,6 +12,8 @@ import {
   Sparkles,
   AlertCircle,
   ChefHat,
+  CheckCircle2,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,12 +32,10 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
   analyzeImage,
-  getFridgeItems,
+  type AIAnalysisMode,
   getTraceabilityByNumber,
   getTraceabilityBundleList,
   isBundleNumber,
@@ -311,8 +311,15 @@ function TraceabilityDetailSections({
   );
 }
 
+// AI 분석 모드: 소 버전 | 돼지 버전 | OCR 버전
+const AI_MODE_OPTIONS: { value: AIAnalysisMode; label: string; icon: React.ReactNode; desc: string }[] = [
+  { value: "beef", label: "소 버전", icon: <Sparkles className="w-4 h-4" />, desc: "소고기 10부위 부위 판별" },
+  { value: "pork", label: "돼지 버전", icon: <Eye className="w-4 h-4" />, desc: "돼지고기 7부위 부위 판별" },
+  { value: "ocr", label: "OCR 버전", icon: <FileText className="w-4 h-4" />, desc: "이력번호·묶음번호 이미지 인식" },
+];
+
 export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
-  const [mode, setMode] = useState<"vision" | "ocr">("vision");
+  const [mode, setMode] = useState<AIAnalysisMode>("beef");
   const [inputMethod, setInputMethod] = useState<"file" | "camera" | null>(
     null
   );
@@ -343,6 +350,18 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   const [showRecipeForPartModal, setShowRecipeForPartModal] = useState(false);
   const [recipeForPartContent, setRecipeForPartContent] = useState<string>("");
   const [loadingRecipeForPart, setLoadingRecipeForPart] = useState(false);
+  const [showSaveSuccessMessage, setShowSaveSuccessMessage] = useState(false);
+  const [showTraceabilitySection, setShowTraceabilitySection] = useState(false);
+  const traceabilitySectionRef = useRef<HTMLDivElement>(null);
+
+  // OCR 실패 시 이력번호 조회 섹션 노출
+  const ocrFailed = mode === "ocr" && result !== null && !result.traceabilityNumber;
+  useEffect(() => {
+    if (ocrFailed) {
+      setShowTraceabilitySection(true);
+      setTimeout(() => traceabilitySectionRef.current?.scrollIntoView({ behavior: "smooth" }), 300);
+    }
+  }, [ocrFailed]);
 
   // Camera refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -695,7 +714,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       console.log(
         `[API REQUEST] POST /api/analyze - mode: ${mode}, file size: ${preprocessedFile.size} bytes, resolution: ${preprocessed.width}x${preprocessed.height}`
       );
-      const analysisResult = await analyzeImage(preprocessedFile, mode, false); // Don't auto-add to fridge
+      const analysisResult = await analyzeImage(preprocessedFile, mode, false); // Don't auto-add to fridge (소/돼지/OCR 3모드)
       console.log(`[API RESPONSE SUCCESS] 분석 결과:`, analysisResult);
       setAnalysisResponse(analysisResult);
 
@@ -760,8 +779,8 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     }
   };
 
-  const handleTraceabilityLookup = async () => {
-    const num = traceInput.trim();
+  const handleTraceabilityLookup = async (overrideNum?: string) => {
+    const num = (overrideNum ?? traceInput).trim();
     if (!num) {
       toast({
         title: "입력 필요",
@@ -901,6 +920,12 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     } else {
       expiry = String(expiry).slice(0, 10);
     }
+    // 만료일이 보관일(오늘) 이전이면 보관일+3일로 보정 (이력정보 유통기한이 과거인 경우)
+    if (expiry <= today) {
+      const d = new Date();
+      d.setDate(d.getDate() + 3);
+      expiry = d.toISOString().slice(0, 10);
+    }
     setSavingFromTraceability(true);
     try {
       await addFridgeItemFromTraceability({
@@ -914,13 +939,13 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
         origin: traceInfo.origin || undefined,
         companyName: traceInfo.companyName || undefined,
       });
+      setShowSaveSuccessMessage(true);
+      setTimeout(() => setShowSaveSuccessMessage(false), 2500);
       toast({
         title: "저장 완료",
         description: "냉장고에 추가되었습니다.",
         duration: 3000,
       });
-      // onSaveToFridge는 중복 toast를 호출하므로 제거
-      // onSaveToFridge?.();
     } catch (err: any) {
       const msg =
         err.response?.data?.detail ||
@@ -988,15 +1013,14 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
 
       await analyzeImage(file, mode, true); // auto_add_fridge = true
 
+      setShowSaveSuccessMessage(true);
+      setTimeout(() => setShowSaveSuccessMessage(false), 2500);
       const successMsg = `${getPartDisplayName(analysisResponse.partName, meatInfo?.displayName)}이(가) 냉장고에 저장되었습니다.`;
       toast({
         title: "저장 완료",
         description: successMsg,
         duration: 3000,
       });
-
-      // onSaveToFridge는 중복 toast를 호출하므로 제거하거나 조건부로 호출
-      // onSaveToFridge();
     } catch (error: any) {
       const errorMsg = error.message || "냉장고에 저장하는데 실패했습니다.";
       console.error("[API RESPONSE ERROR]: ", error.response?.data || errorMsg);
@@ -1050,159 +1074,78 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6 pb-6 sm:pb-8">
       {/* Header with Back Button */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3">
         {onBack && <BackButton onClick={onBack} />}
-        <h2 className="text-2xl font-bold text-foreground">고기 분석</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground">고기 분석</h2>
       </div>
 
-      {/* Mode Toggle */}
-      <Card className="bg-card border-primary/20">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Eye
-                  className={`w-5 h-5 ${
-                    mode === "vision" ? "text-primary" : "text-muted-foreground"
+      {/* AI 분석 모드 선택: 소 버전 | 돼지 버전 | OCR 버전 — 모바일 최적화 */}
+      <Card className="bg-card/95 backdrop-blur border-primary/20 shadow-lg shadow-primary/5 rounded-2xl overflow-hidden">
+        <CardHeader className="pb-2 px-4 sm:px-6 pt-4 sm:pt-6">
+          <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <Sparkles className="w-4 h-4 text-primary" />
+            </span>
+            부위 판별 모드
+          </CardTitle>
+          <CardDescription className="text-xs sm:text-sm mt-1">
+            분석할 고기 종류 또는 인식 방식을 선택하세요. (AI 가중치 학습 중)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            {AI_MODE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setMode(opt.value)}
+                className={`
+                  flex flex-col items-center gap-3 min-h-[100px] sm:min-h-[110px] p-5 rounded-2xl border-2 transition-all duration-200
+                  active:scale-[0.98] touch-manipulation
+                  ${
+                    mode === opt.value
+                      ? "border-primary bg-gradient-to-br from-primary/15 to-primary/5 text-primary shadow-md shadow-primary/10"
+                      : "border-border/80 bg-muted/30 hover:border-primary/40 hover:bg-muted/60"
+                  }
+                `}
+              >
+                <div
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl transition-colors ${
+                    mode === opt.value ? "bg-primary/25" : "bg-muted"
                   }`}
-                />
-                <Label htmlFor="mode-switch" className="text-sm font-medium">
-                  {mode === "vision" ? "부위 판별 모드" : "이력번호 인식 모드"}
-                </Label>
-              </div>
-              <Switch
-                id="mode-switch"
-                checked={mode === "ocr"}
-                onCheckedChange={(checked) =>
-                  setMode(checked ? "ocr" : "vision")
-                }
-                className="data-[state=checked]:bg-primary"
-              />
-              <FileText
-                className={`w-5 h-5 ${
-                  mode === "ocr" ? "text-primary" : "text-muted-foreground"
-                }`}
-              />
-            </div>
-            <Badge variant="outline" className="gap-1">
-              <Sparkles className="w-3 h-3" />
-              AI {mode === "vision" ? "Vision" : "OCR"}
+                >
+                  {opt.icon}
+                </div>
+                <span className="font-bold text-sm sm:text-base">{opt.label}</span>
+                <span className="text-[11px] sm:text-xs text-muted-foreground text-center leading-tight">
+                  {opt.desc}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 flex items-center justify-end">
+            <Badge variant="outline" className="gap-1.5 px-3 py-1 text-xs font-medium">
+              AI {mode === "beef" ? "소 10부위" : mode === "pork" ? "돼지 7부위" : "OCR"}
             </Badge>
           </div>
         </CardContent>
       </Card>
 
-      {/* 이력번호 / 묶음번호 직접 조회 */}
-      <Card className="bg-card border-primary/20">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            이력번호 / 묶음번호로 조회
-          </CardTitle>
-          <CardDescription>
-            국내 12자리 이력번호(002188519524) 또는 묶음번호(L12601205379002)는
-            M-Trace 웹사이트로 이동하며, 수입 묶음번호(A+숫자)는 사이트에서
-            조회됩니다.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex gap-2">
-            <Input
-              placeholder="예: 002188519524 또는 L12601205379002 (국산), A41535850069100026012505 (수입)"
-              value={traceInput}
-              onChange={(e) => {
-                setTraceInput(e.target.value);
-                setManualTraceError(null);
-              }}
-              onKeyDown={(e) => e.key === "Enter" && handleTraceabilityLookup()}
-              className="flex-1"
-            />
-            <Button
-              onClick={handleTraceabilityLookup}
-              disabled={manualTraceLoading}
-              variant="secondary"
-              className="shrink-0"
-            >
-              {manualTraceLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "조회"
-              )}
-            </Button>
-          </div>
-          {manualTraceError && (
-            <p className="text-sm text-destructive">{manualTraceError}</p>
-          )}
-          {/* 묶음 조회: 이력 목록 (클릭 시 상세) */}
-          {manualTraceabilityList && manualTraceabilityList.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-primary">
-                묶음 이력 목록 ({manualTraceabilityList.length}건) — 클릭 시
-                상세
-              </h4>
-              <ul className="space-y-2 max-h-48 overflow-y-auto">
-                {manualTraceabilityList.map((item, idx) => (
-                  <li key={item.historyNo ?? idx}>
-                    <button
-                      type="button"
-                      onClick={() => handleTraceItemClick(item.historyNo)}
-                      disabled={detailLoading}
-                      className="w-full text-left p-3 rounded-lg border border-border hover:bg-primary/10 hover:border-primary/30 transition-colors disabled:opacity-50"
-                    >
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {item.historyNo || "(이력번호 없음)"}
-                      </span>
-                      {(item.origin || item.partName || item.slaughterDate) && (
-                        <span className="ml-2 text-sm">
-                          {[item.origin, item.partName, item.slaughterDate]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {detailLoading && (
-                <p className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  상세 정보 조회 중...
-                </p>
-              )}
-              {selectedTraceDetail && (
-                <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
-                  <h4 className="text-sm font-semibold text-primary">
-                    선택 이력 상세 (냉장고 연동용)
-                  </h4>
-                  <TraceabilityDetailSections
-                    info={selectedTraceDetail}
-                    onSaveToFridge={() =>
-                      handleSaveTraceabilityToFridge(selectedTraceDetail)
-                    }
-                    saving={savingFromTraceability}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-          {/* 단건 조회: 이력 정보 4개 섹션 + 냉장고 저장 */}
-          {manualTraceability && !manualTraceabilityList?.length && (
-            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
-              <h4 className="text-sm font-semibold text-primary">
-                이력 정보 (냉장고 연동용)
-              </h4>
-              <TraceabilityDetailSections
-                info={manualTraceability}
-                onSaveToFridge={() =>
-                  handleSaveTraceabilityToFridge(manualTraceability)
-                }
-                saving={savingFromTraceability}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* OCR 모드에서만: 이력번호 직접 입력 링크 (상단에는 조회 카드 없음) */}
+      {mode === "ocr" && !showTraceabilitySection && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowTraceabilitySection(true)}
+            className="text-sm text-primary hover:underline font-medium flex items-center gap-1.5"
+          >
+            <FileText className="w-4 h-4" />
+            이력번호 직접 입력하여 조회
+          </button>
+        </div>
+      )}
 
       {/* Main Content */}
       <AnimatePresence mode="wait">
@@ -1215,25 +1158,28 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-4"
           >
-            {/* Drag & Drop Zone */}
+            {/* Drag & Drop Zone — 모바일 터치 영역 확대 */}
             <Card
-              className="bg-card border-2 border-dashed border-primary/30 hover:border-primary/50 transition-colors cursor-pointer"
+              className="bg-gradient-to-br from-muted/50 to-card border-2 border-dashed border-primary/40 hover:border-primary/60 active:border-primary/70 transition-all cursor-pointer rounded-2xl overflow-hidden shadow-sm hover:shadow-md active:scale-[0.995] touch-manipulation"
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
             >
-              <CardContent className="py-12">
+              <CardContent className="py-14 sm:py-16 px-4">
                 <div className="text-center">
-                  <Upload className="w-16 h-16 mx-auto mb-4 text-primary/50" />
-                  <h3 className="text-lg font-semibold mb-2">
+                  <div className="inline-flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-2xl bg-primary/10 mb-5">
+                    <Upload className="w-10 h-10 sm:w-12 sm:h-12 text-primary" />
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold mb-2 text-foreground">
                     이미지를 드래그하거나 클릭하세요
                   </h3>
-                  <p className="text-sm text-muted-foreground mb-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-5">
                     JPG, PNG 파일 (최대 10MB)
                   </p>
                   <Button
                     variant="outline"
-                    className="border-primary text-primary hover:bg-primary/10"
+                    size="lg"
+                    className="border-primary text-primary hover:bg-primary/10 min-h-12 px-6 font-semibold rounded-xl"
                   >
                     파일 선택
                   </Button>
@@ -1248,11 +1194,11 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
               </CardContent>
             </Card>
 
-            {/* Camera Button */}
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            {/* Camera Button — 모바일 최소 48px 터치 영역 */}
+            <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
               <Button
                 onClick={startCamera}
-                className="w-full h-20 bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-semibold gap-3"
+                className="w-full min-h-[56px] sm:min-h-[64px] bg-primary hover:bg-primary/90 text-primary-foreground text-base sm:text-lg font-bold gap-3 rounded-xl shadow-lg shadow-primary/20"
               >
                 <Camera className="w-6 h-6" />
                 {isMobileDevice() ? "카메라로 촬영하기" : "웹캠으로 촬영하기"}
@@ -1348,7 +1294,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* 분석 완료 알림 - 가운데 출력 */}
+                {/* 분석 완료 알림 - 모드별 출력 */}
                 {result && !analyzing && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -1362,18 +1308,61 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                       </div>
                       <div className="text-center flex-1">
                         <h3 className="text-xl font-bold text-primary mb-1">
-                          분석이 완료되었습니다!
+                          {mode === "ocr"
+                            ? "이력번호 인식이 완료되었습니다!"
+                            : "부위 분석이 완료되었습니다!"}
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          {getPartDisplayName(result.partName, meatInfo?.displayName)} 부위가 성공적으로 분석되었습니다.
+                          {mode === "ocr" ? (
+                            result.traceabilityNumber ? (
+                              <>
+                                인식된 번호:{" "}
+                                <span className="font-mono font-semibold">
+                                  {result.traceabilityNumber}
+                                </span>
+                              </>
+                            ) : (
+                              "이미지에서 이력번호를 찾지 못했습니다."
+                            )
+                          ) : (
+                            <>
+                              {getPartDisplayName(result.partName, meatInfo?.displayName)} 부위가 성공적으로 분석되었습니다.
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
                   </motion.div>
                 )}
                 
-                {/* Analysis Result - 반응형 레이아웃 */}
-                {result ? (
+                {/* Analysis Result - 반응형 레이아웃 (OCR 모드는 이력 조회 영역으로 연결) */}
+                {result && mode === "ocr" ? (
+                  <div className="space-y-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
+                    <h4 className="text-sm font-semibold text-primary">OCR 인식 결과</h4>
+                    {result.traceabilityNumber ? (
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <Input
+                          value={result.traceabilityNumber}
+                          readOnly
+                          className="font-mono"
+                        />
+                        <Button
+                          onClick={() =>
+                            handleTraceabilityLookup(result.traceabilityNumber || "")
+                          }
+                          variant="secondary"
+                          className="shrink-0"
+                        >
+                          이력번호로 조회하기
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        이미지에서 이력번호를 찾지 못했습니다. 이력번호가 선명하게 보이도록 다시 촬영해 주세요.
+                      </p>
+                    )}
+                  </div>
+                ) : result ? (
                   <div className="flex flex-col lg:flex-row gap-6">
                     {/* 왼쪽: 이미지 (작게) */}
                     <div className="flex-shrink-0 lg:w-80 xl:w-96">
@@ -1466,6 +1455,10 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                             </h4>
                             <TraceabilityDetailSections
                               info={analysisResponse.traceability}
+                              onSaveToFridge={() =>
+                                handleSaveTraceabilityToFridge(analysisResponse.traceability)
+                              }
+                              saving={savingFromTraceability}
                             />
                           </div>
                         )}
@@ -1744,7 +1737,11 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                         ) : (
                           <>
                             <Sparkles className="w-5 h-5 mr-2" />
-                            AI 분석 시작
+                            {mode === "ocr"
+                              ? "OCR 인식 시작"
+                              : mode === "beef"
+                              ? "소 부위 분석"
+                              : "돼지 부위 분석"}
                           </>
                         )}
                       </Button>
@@ -1766,6 +1763,152 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
         >
           {error}
         </motion.div>
+      )}
+
+      {/* 저장 성공 시 가운데 메시지 UI */}
+      <AnimatePresence>
+        {showSaveSuccessMessage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+            onClick={() => setShowSaveSuccessMessage(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card rounded-2xl shadow-xl border-2 border-primary/30 p-8 max-w-sm w-full text-center"
+            >
+              <div className="flex justify-center mb-4">
+                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center">
+                  <CheckCircle2 className="w-10 h-10 text-primary" />
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-1">저장되었습니다</h3>
+              <p className="text-sm text-muted-foreground">냉장고에 추가되었습니다.</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 이력번호/묶음번호 조회 — OCR 실패 시 또는 "직접 입력" 클릭 시 노출 */}
+      {showTraceabilitySection && (
+        <div ref={traceabilitySectionRef} className="space-y-3">
+          {ocrFailed && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-center">
+              <p className="text-sm font-medium">
+                이미지에서 이력번호를 인식하지 못했습니다. 아래에서 이력번호를 직접 입력해 조회해 보세요.
+              </p>
+            </div>
+          )}
+          <Card className="bg-card/95 backdrop-blur border-primary/20 shadow-lg shadow-primary/5 rounded-2xl overflow-hidden">
+            <CardHeader className="pb-2 px-4 sm:px-6 pt-4 sm:pt-6">
+              <CardTitle className="text-base sm:text-lg">이력번호 / 묶음번호로 조회</CardTitle>
+              <div className="flex gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs sm:text-sm mt-2">
+                <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                <p>
+                  <strong>국내육</strong> 12자리 이력번호 또는 묶음번호(L+숫자) 조회 시 <strong>M-Trace 등 외부 사이트로 이동</strong>됩니다. 수입육 묶음번호(A+숫자)는 이 사이트에서 조회됩니다.
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 px-4 sm:px-6 pb-4 sm:pb-6">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Input
+                  placeholder="예: 002188519524 또는 L12601205379002 (국산), A41535850069100026012505 (수입)"
+                  value={traceInput}
+                  onChange={(e) => {
+                    setTraceInput(e.target.value);
+                    setManualTraceError(null);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && handleTraceabilityLookup()}
+                  className="flex-1 min-h-11 sm:min-h-10"
+                />
+                <Button
+                  onClick={() => handleTraceabilityLookup()}
+                  disabled={manualTraceLoading}
+                  variant="secondary"
+                  className="shrink-0 min-h-11 sm:min-h-10 font-semibold"
+                >
+                  {manualTraceLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "조회"
+                  )}
+                </Button>
+              </div>
+              {manualTraceError && (
+                <p className="text-sm text-destructive">{manualTraceError}</p>
+              )}
+              {manualTraceabilityList && manualTraceabilityList.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-primary">
+                    묶음 이력 목록 ({manualTraceabilityList.length}건) — 클릭 시 상세
+                  </h4>
+                  <ul className="space-y-2 max-h-48 overflow-y-auto">
+                    {manualTraceabilityList.map((item, idx) => (
+                      <li key={item.historyNo ?? idx}>
+                        <button
+                          type="button"
+                          onClick={() => handleTraceItemClick(item.historyNo)}
+                          disabled={detailLoading}
+                          className="w-full text-left p-3 rounded-lg border border-border hover:bg-primary/10 hover:border-primary/30 transition-colors disabled:opacity-50"
+                        >
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {item.historyNo || "(이력번호 없음)"}
+                          </span>
+                          {(item.origin || item.partName || item.slaughterDate) && (
+                            <span className="ml-2 text-sm">
+                              {[item.origin, item.partName, item.slaughterDate]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {detailLoading && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      상세 정보 조회 중...
+                    </p>
+                  )}
+                  {selectedTraceDetail && (
+                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
+                      <h4 className="text-sm font-semibold text-primary">
+                        선택 이력 상세 (냉장고 연동용)
+                      </h4>
+                      <TraceabilityDetailSections
+                        info={selectedTraceDetail}
+                        onSaveToFridge={() =>
+                          handleSaveTraceabilityToFridge(selectedTraceDetail)
+                        }
+                        saving={savingFromTraceability}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              {manualTraceability && !manualTraceabilityList?.length && (
+                <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
+                  <h4 className="text-sm font-semibold text-primary">
+                    이력 정보 (냉장고 연동용)
+                  </h4>
+                  <TraceabilityDetailSections
+                    info={manualTraceability}
+                    onSaveToFridge={() =>
+                      handleSaveTraceabilityToFridge(manualTraceability)
+                    }
+                    saving={savingFromTraceability}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* 이 부위 레시피 추천 모달 */}

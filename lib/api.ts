@@ -256,10 +256,13 @@ export const logout = (): void => {
   removeAuthToken();
 };
 
+// AI 분석 모드: 소 버전(beef) | 돼지 버전(pork) | OCR 버전(ocr)
+export type AIAnalysisMode = "beef" | "pork" | "ocr";
+
 // Analysis APIs (AI Server)
 export const analyzeImage = async (
   imageFile: File,
-  mode: "vision" | "ocr" = "vision",
+  mode: AIAnalysisMode = "beef",
   autoAddFridge: boolean = false
 ): Promise<AIAnalyzeResponse> => {
   const formData = new FormData();
