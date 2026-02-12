@@ -45,7 +45,6 @@ const PART_DISPLAY_NAMES: Record<string, string> = {
   Beef_Sirloin: "소/채끝",
   Beef_Chuck: "소/목심",
   Beef_Round: "소/우둔",
-  Beef_BottomRound: "소/설도",
   Beef_Brisket: "소/양지",
   Beef_Shank: "소/사태",
   Beef_Rib: "소/갈비",

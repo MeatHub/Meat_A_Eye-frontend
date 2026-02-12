@@ -71,7 +71,6 @@ const PART_DISPLAY_NAMES: Record<string, string> = {
   Beef_Sirloin: "소/채끝",
   Beef_Chuck: "소/목심",
   Beef_Round: "소/우둔",
-  Beef_BottomRound: "소/설도",
   Beef_Brisket: "소/양지",
   Beef_Shank: "소/사태",
   Beef_Rib: "소/갈비",
@@ -327,7 +326,7 @@ const AI_MODE_OPTIONS: {
     value: "beef",
     label: "소 버전",
     icon: <Sparkles className="w-4 h-4" />,
-    desc: "소고기 10부위 부위 판별",
+    desc: "소고기 9부위 부위 판별",
   },
   {
     value: "pork",
@@ -413,7 +412,8 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
         window.open(mtraceUrl, "_blank");
         toast({
           title: "국내육 이력 조회",
-          description: "국산육 이력 정보는 M-Trace 공식 웹사이트에서 확인할 수 있습니다.",
+          description:
+            "국산육 이력 정보는 M-Trace 공식 웹사이트에서 확인할 수 있습니다.",
         });
         return;
       }
@@ -1219,7 +1219,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
             >
               AI{" "}
               {mode === "beef"
-                ? "소 10부위"
+                ? "소 9부위"
                 : mode === "pork"
                   ? "돼지 7부위"
                   : "OCR"}

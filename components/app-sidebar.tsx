@@ -67,7 +67,6 @@ const PART_DISPLAY_NAMES: Record<string, string> = {
   Beef_Sirloin: "소/채끝",
   Beef_Chuck: "소/목심",
   Beef_Round: "소/우둔",
-  Beef_BottomRound: "소/설도",
   Beef_Brisket: "소/양지",
   Beef_Shank: "소/사태",
   Beef_Rib: "소/갈비",
@@ -88,7 +87,11 @@ function getPartDisplayName(name: string): string {
 }
 
 // 최근 분석 결과 컴포넌트
-function RecentAnalysisResults({ onNavigate }: { onNavigate: (menu: string) => void }) {
+function RecentAnalysisResults({
+  onNavigate,
+}: {
+  onNavigate: (menu: string) => void;
+}) {
   const [recentItems, setRecentItems] = useState<FridgeItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -189,12 +192,9 @@ function RecentAnalysisResults({ onNavigate }: { onNavigate: (menu: string) => v
   );
 }
 
-export function AppSidebar({
-  activeMenu,
-  onMenuChange,
-}: AppSidebarProps) {
+export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
   const [factIndex, setFactIndex] = useState(() =>
-    Math.floor(Math.random() * meatFacts.length)
+    Math.floor(Math.random() * meatFacts.length),
   );
 
   const refreshFact = () => {
@@ -242,7 +242,7 @@ export function AppSidebar({
                     "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
                     isActive
                       ? "bg-primary text-primary-foreground shadow-md"
-                      : "text-foreground hover:bg-secondary"
+                      : "text-foreground hover:bg-secondary",
                   )}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -260,7 +260,7 @@ export function AppSidebar({
       <div className="p-4 space-y-3 border-t border-border">
         {/* 최근 분석 결과 */}
         <RecentAnalysisResults onNavigate={onMenuChange} />
-        
+
         {/* Today's Meat Fact */}
         <motion.div
           key={factIndex}
