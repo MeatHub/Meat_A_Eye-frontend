@@ -868,10 +868,10 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
           <CardContent className="space-y-4 sm:space-y-6 px-3 sm:px-6">
             {/* 카테고리바 - 트렌디한 디자인 */}
             <div
-              className={`grid grid-cols-1 sm:grid-cols-2 ${shouldHideGradeCategory() ? "xl:grid-cols-4" : "xl:grid-cols-5"} gap-3 sm:gap-4 p-4 sm:p-5 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 rounded-2xl border-2 border-primary/20 shadow-lg backdrop-blur-sm`}
+              className={`grid grid-cols-1 sm:grid-cols-2 ${shouldHideGradeCategory() ? "xl:grid-cols-4" : "xl:grid-cols-5"} gap-4 sm:gap-5 p-4 sm:p-5 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 rounded-2xl border-2 border-primary/20 shadow-lg backdrop-blur-sm`}
             >
               {/* 지역 선택 */}
-              <div className="space-y-2 min-w-0">
+              <div className="space-y-2 min-w-0 overflow-hidden">
                 <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
                   <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
                   <span className="truncate">지역</span>
@@ -881,7 +881,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                   onValueChange={setSelectedRegion}
                   disabled={priceLoading || historyLoading}
                 >
-                  <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
+                  <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md w-full">
                     <SelectValue placeholder="지역 선택" />
                   </SelectTrigger>
                   <SelectContent>
@@ -895,7 +895,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               </div>
 
               {/* 부류 선택 (품목) */}
-              <div className="space-y-2 min-w-0">
+              <div className="space-y-2 min-w-0 overflow-hidden">
                 <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
                   <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
                   <span className="truncate">품목</span>
@@ -905,7 +905,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                   onValueChange={handleCategoryChange}
                   disabled={priceLoading || historyLoading}
                 >
-                  <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
+                  <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md w-full">
                     <SelectValue placeholder="품목 선택" />
                   </SelectTrigger>
                   <SelectContent>
@@ -918,7 +918,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               </div>
 
               {/* 품종 선택 */}
-              <div className="space-y-2 min-w-0">
+              <div className="space-y-2 min-w-0 overflow-hidden">
                 <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
                   <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
                   <span className="truncate">품종</span>
@@ -928,7 +928,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                   onValueChange={handlePartChange}
                   disabled={priceLoading || historyLoading}
                 >
-                  <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
+                  <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md w-full">
                     <SelectValue placeholder="품종 선택" />
                   </SelectTrigger>
                   <SelectContent>
@@ -943,7 +943,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
 
               {/* 등급/원산지 선택 - 수입 소고기/수입 돼지고기 선택 시 숨김 */}
               {!shouldHideGradeCategory() && (
-                <div className="space-y-2 min-w-0">
+                <div className="space-y-2 min-w-0 overflow-hidden">
                   <label className="text-xs sm:text-sm font-bold text-foreground/90 flex items-center gap-1.5 uppercase tracking-wide">
                     <span className="w-2 h-2 rounded-full bg-primary animate-pulse flex-shrink-0"></span>
                     <span className="truncate">{getGradeLabel()}</span>
@@ -956,7 +956,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                     }}
                     disabled={isGradeDisabled()}
                   >
-                    <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
+                    <SelectTrigger className="h-12 sm:h-11 text-sm sm:text-base bg-background/90 border-primary/30 hover:border-primary/50 transition-all shadow-sm hover:shadow-md w-full">
                       <SelectValue placeholder={getGradeLabel() + " 선택"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -971,7 +971,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
               )}
 
               {/* 조회 버튼 */}
-              <div className="flex items-end min-w-0">
+              <div className="flex items-end min-w-0 overflow-hidden">
                 <Button
                   onClick={handleSearch}
                   disabled={priceLoading || historyLoading}
