@@ -23,6 +23,7 @@ import type { FridgeItemResponse } from "@/src/types/api";
 interface AppSidebarProps {
   activeMenu: string;
   onMenuChange: (menu: string) => void;
+  refreshKey?: number;
 }
 
 const menuItems = [
@@ -86,11 +87,27 @@ function getPartDisplayName(name: string): string {
   return PART_DISPLAY_NAMES[name] ?? name;
 }
 
+// 희망 섭취기간 우선, 없으면 유통기한 기준 D-day
+function getEffectiveDDay(item: FridgeItemResponse): number {
+  if (item.desiredConsumptionDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(item.desiredConsumptionDate);
+    target.setHours(0, 0, 0, 0);
+    return Math.ceil(
+      (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+  }
+  return item.dDay;
+}
+
 // 최근 분석 결과 컴포넌트
 function RecentAnalysisResults({
   onNavigate,
+  refreshKey = 0,
 }: {
   onNavigate: (menu: string) => void;
+  refreshKey?: number;
 }) {
   const [recentItems, setRecentItems] = useState<FridgeItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +129,7 @@ function RecentAnalysisResults({
       }
     };
     loadRecent();
-  }, []);
+  }, [refreshKey]);
 
   return (
     <motion.div
@@ -172,7 +189,8 @@ function RecentAnalysisResults({
                   variant="outline"
                   className="text-[9px] h-4 px-1.5 ml-1 border-primary/30 text-primary"
                 >
-                  D-{item.dDay}
+                  D{getEffectiveDDay(item) >= 0 ? "-" : "+"}
+                  {Math.abs(getEffectiveDDay(item))}
                 </Badge>
               </div>
               <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
@@ -192,7 +210,11 @@ function RecentAnalysisResults({
   );
 }
 
-export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
+export function AppSidebar({
+  activeMenu,
+  onMenuChange,
+  refreshKey = 0,
+}: AppSidebarProps) {
   const [factIndex, setFactIndex] = useState(() =>
     Math.floor(Math.random() * meatFacts.length),
   );
@@ -259,7 +281,10 @@ export function AppSidebar({ activeMenu, onMenuChange }: AppSidebarProps) {
       {/* Bottom Widget - 최근 분석 결과 */}
       <div className="p-4 space-y-3 border-t border-border">
         {/* 최근 분석 결과 */}
-        <RecentAnalysisResults onNavigate={onMenuChange} />
+        <RecentAnalysisResults
+          onNavigate={onMenuChange}
+          refreshKey={refreshKey}
+        />
 
         {/* Today's Meat Fact */}
         <motion.div

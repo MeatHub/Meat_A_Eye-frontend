@@ -328,9 +328,9 @@ const AI_MODE_OPTIONS: {
   },
   {
     value: "ocr",
-    label: "OCR 버전",
+    label: "이력번호 조회",
     icon: <FileText className="w-4 h-4" />,
-    desc: "이력번호·묶음번호 이미지 인식",
+    desc: "축산물 이력번호·묶음번호 OCR 인식",
   },
 ];
 
@@ -1037,6 +1037,8 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
         description: "냉장고에 추가되었습니다.",
         duration: 3000,
       });
+      // 부모에게 냉장고 변경 알림 (사이드바 새로고침 등)
+      onSaveToFridge?.();
     } catch (err: any) {
       const msg =
         err.response?.data?.detail ||
@@ -1113,6 +1115,8 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
         description: successMsg,
         duration: 3000,
       });
+      // 부모에게 냉장고 변경 알림 (사이드바 새로고침 등)
+      onSaveToFridge?.();
     } catch (error: any) {
       const errorMsg = error.message || "냉장고에 저장하는데 실패했습니다.";
       console.error("[API RESPONSE ERROR]: ", error.response?.data || errorMsg);
@@ -1229,7 +1233,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                 ? "소 9부위"
                 : mode === "pork"
                   ? "돼지 7부위"
-                  : "OCR"}
+                  : "이력번호 조회"}
             </Badge>
           </div>
         </CardContent>

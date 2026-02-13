@@ -522,6 +522,13 @@ export function FridgeView() {
     return diffDays;
   };
 
+  // 희망 섭취기간이 있으면 그 기준, 없으면 유통기한 기준 D-day
+  const getEffectiveDDay = (item: FridgeItemResponse): number => {
+    return item.desiredConsumptionDate
+      ? getDDay(item.desiredConsumptionDate)
+      : item.dDay;
+  };
+
   const getDDayColor = (daysLeft: number): "red" | "yellow" | "green" => {
     if (daysLeft <= 1) return "red";
     if (daysLeft <= 3) return "yellow";
@@ -621,13 +628,13 @@ export function FridgeView() {
               </span>
               개
               {fridgeItems.some(
-                (i) => i.dDay <= 3 && i.status === "stored",
+                (i) => getEffectiveDDay(i) <= 3 && i.status === "stored",
               ) && (
                 <span className="ml-2 text-red-600 font-medium">
                   · 유통기한 임박{" "}
                   {
                     fridgeItems.filter(
-                      (i) => i.dDay <= 3 && i.status === "stored",
+                      (i) => getEffectiveDDay(i) <= 3 && i.status === "stored",
                     ).length
                   }
                   개
@@ -928,11 +935,10 @@ export function FridgeView() {
           <AnimatePresence>
             {fridgeItems
               .filter((item) => item.status === "stored")
+              .sort((a, b) => getEffectiveDDay(a) - getEffectiveDDay(b))
               .map((item, index) => {
                 // 희망 섭취기간이 설정되어 있으면 그 날짜 기준, 아니면 유통기한 기준
-                const daysLeft = item.desiredConsumptionDate
-                  ? getDDay(item.desiredConsumptionDate)
-                  : item.dDay;
+                const daysLeft = getEffectiveDDay(item);
                 const color = getDDayColor(daysLeft);
 
                 const borderColors = {
@@ -1379,7 +1385,7 @@ export function FridgeView() {
 
       {/* Warning Message for Expiring Items */}
       {fridgeItems.some(
-        (item) => item.dDay <= 3 && item.status === "stored",
+        (item) => getEffectiveDDay(item) <= 3 && item.status === "stored",
       ) && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}

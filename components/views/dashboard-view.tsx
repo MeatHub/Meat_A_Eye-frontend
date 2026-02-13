@@ -601,8 +601,27 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     }
   };
 
-  // Sort fridge items by expiry date (already sorted by API, but ensure)
-  const sortedFridgeItems = [...fridgeItems].sort((a, b) => a.dDay - b.dDay);
+  // 희망 섭취기간이 있으면 그 기준, 없으면 유통기한 기준 D-day
+  const getDDay = (dateStr: string): number => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(dateStr);
+    target.setHours(0, 0, 0, 0);
+    return Math.ceil(
+      (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+  };
+
+  const getEffectiveDDay = (item: FridgeItemResponse): number => {
+    return item.desiredConsumptionDate
+      ? getDDay(item.desiredConsumptionDate)
+      : item.dDay;
+  };
+
+  // Sort fridge items by effective D-day (희망 섭취기간 우선, 없으면 유통기한)
+  const sortedFridgeItems = [...fridgeItems].sort(
+    (a, b) => getEffectiveDDay(a) - getEffectiveDDay(b),
+  );
 
   // Prepare chart data for meat parts distribution
   const meatPartsData = fridgeItems.reduce(
@@ -1474,7 +1493,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
             ) : (
               <div className="space-y-3">
                 {sortedFridgeItems.slice(0, 8).map((item, index) => {
-                  const daysLeft = item.dDay;
+                  const daysLeft = getEffectiveDDay(item);
                   const color =
                     daysLeft <= 1 ? "red" : daysLeft <= 3 ? "yellow" : "green";
                   const colorClasses = {
@@ -1509,7 +1528,8 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                                 : "border-green-500 text-green-700 bg-green-100/50"
                           }`}
                         >
-                          D-{daysLeft}
+                          D{daysLeft >= 0 ? "-" : "+"}
+                          {Math.abs(daysLeft)}
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">

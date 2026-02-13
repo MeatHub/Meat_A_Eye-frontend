@@ -26,6 +26,7 @@ export default function MeatAEyeDashboard() {
   const [guestNickname, setGuestNickname] = useState<string | null>(null);
   const [showEntryGate, setShowEntryGate] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
   // activeMenu 변경 시 URL 쿼리 파라미터도 함께 업데이트
   const setActiveMenu = useCallback((menu: string) => {
@@ -68,6 +69,8 @@ export default function MeatAEyeDashboard() {
       title: "냉장고에 저장되었습니다! 🥩",
       description: "냉장고 관리 페이지에서 보관 현황을 확인하세요.",
     });
+    // 사이드바 최근 분석 결과 새로고침
+    setSidebarRefreshKey((prev) => prev + 1);
     // Optionally navigate to fridge
     setTimeout(() => setActiveMenu("fridge"), 1000);
   };
@@ -200,7 +203,11 @@ export default function MeatAEyeDashboard() {
 
       <div className="flex">
         {/* Desktop Sidebar */}
-        <AppSidebar activeMenu={activeMenu} onMenuChange={setActiveMenu} />
+        <AppSidebar
+          activeMenu={activeMenu}
+          onMenuChange={setActiveMenu}
+          refreshKey={sidebarRefreshKey}
+        />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-h-screen">
