@@ -43,6 +43,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   getFridgeItems,
   addFridgeItem,
   deleteFridgeItem,
@@ -110,6 +116,9 @@ export function FridgeView() {
     expiryDate: "",
   });
   const [showFridgeRecipeModal, setShowFridgeRecipeModal] = useState(false);
+  const [fridgeRecipeMeatCategory, setFridgeRecipeMeatCategory] = useState<
+    "beef" | "pork" | undefined
+  >(undefined);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [consumeConfirmId, setConsumeConfirmId] = useState<number | null>(null);
   const [addPreviewNutrition, setAddPreviewNutrition] = useState<{
@@ -464,7 +473,9 @@ export function FridgeView() {
             ? {
                 ...i,
                 name: res.name,
-                customName: res.customName ?? i.customName,
+                meatInfoId: res.meatInfoId,
+                customName: res.customName,
+                desiredConsumptionDate: res.desiredConsumptionDate,
               }
             : i,
         ),
@@ -626,15 +637,44 @@ export function FridgeView() {
           </div>
           <div className="flex gap-2 ml-[52px] sm:ml-0">
             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Button
-                onClick={() => setShowFridgeRecipeModal(true)}
-                variant="outline"
-                className="gap-2 border-primary text-primary hover:bg-primary/10 font-semibold"
-              >
-                <ChefHat className="w-4 h-4" />
-                <span className="hidden sm:inline">냉장고 기반</span> 레시피
-                추천
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="gap-2 border-primary text-primary hover:bg-primary/10 font-semibold"
+                  >
+                    <ChefHat className="w-4 h-4" />
+                    <span className="hidden sm:inline">냉장고 기반</span> 레시피
+                    추천
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setFridgeRecipeMeatCategory(undefined);
+                      setShowFridgeRecipeModal(true);
+                    }}
+                  >
+                    🍖 전체 (랜덤)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setFridgeRecipeMeatCategory("beef");
+                      setShowFridgeRecipeModal(true);
+                    }}
+                  >
+                    🥩 소고기로 추천
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setFridgeRecipeMeatCategory("pork");
+                      setShowFridgeRecipeModal(true);
+                    }}
+                  >
+                    🍖 돼지고기로 추천
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </motion.div>
             <Dialog
               open={isAddModalOpen}
@@ -804,6 +844,7 @@ export function FridgeView() {
                         id="storageDate"
                         type="date"
                         value={newItem.storageDate}
+                        min={new Date().toISOString().split("T")[0]}
                         onChange={(e) =>
                           setNewItem({
                             ...newItem,
@@ -1044,6 +1085,11 @@ export function FridgeView() {
                                       <CardTitle className="text-base font-bold text-foreground leading-tight">
                                         {partName}
                                       </CardTitle>
+                                      {item.customName && (
+                                        <span className="text-xs text-muted-foreground font-medium truncate">
+                                          {item.customName}
+                                        </span>
+                                      )}
                                     </div>
                                   );
                                 })()}
@@ -1350,6 +1396,7 @@ export function FridgeView() {
         open={showFridgeRecipeModal}
         onOpenChange={setShowFridgeRecipeModal}
         source="fridge_random"
+        meatCategory={fridgeRecipeMeatCategory}
       />
 
       {/* 삭제 확인 다이얼로그 */}

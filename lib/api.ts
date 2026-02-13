@@ -514,21 +514,37 @@ export const getRecipes = async (meatType?: string): Promise<Recipe[]> => {
         const titleMatch = r.content.match(/^#\s+(.+)$/m);
         const title = titleMatch ? titleMatch[1] : r.title;
         let meatTypeFromContent = "전체";
+        // 1) used_meats 필드에서 육류 종류 추론 (한글 + 영문 키워드)
         if (r.used_meats) {
           try {
             const meats = JSON.parse(r.used_meats);
             if (Array.isArray(meats) && meats.length > 0) {
-              const firstMeat = meats[0];
-              if (typeof firstMeat === "string") {
-                if (firstMeat.includes("소") || firstMeat.includes("한우"))
-                  meatTypeFromContent = "소고기";
-                else if (firstMeat.includes("돼지"))
-                  meatTypeFromContent = "돼지고기";
-              }
+              const allMeatsStr = meats.join(" ");
+              if (
+                allMeatsStr.includes("소") ||
+                allMeatsStr.includes("한우") ||
+                /Beef/i.test(allMeatsStr) ||
+                /Import_Beef/i.test(allMeatsStr)
+              )
+                meatTypeFromContent = "소고기";
+              else if (
+                allMeatsStr.includes("돼지") ||
+                /Pork/i.test(allMeatsStr) ||
+                /Import_Pork/i.test(allMeatsStr)
+              )
+                meatTypeFromContent = "돼지고기";
             }
           } catch {
             // ignore
           }
+        }
+        // 2) 여전히 "전체"면 제목+본문에서 키워드 검색
+        if (meatTypeFromContent === "전체") {
+          const snippet = `${r.title} ${r.content.substring(0, 500)}`;
+          if (/소고기|한우|소\/|Beef/i.test(snippet))
+            meatTypeFromContent = "소고기";
+          else if (/돼지고기|돼지\/|Pork/i.test(snippet))
+            meatTypeFromContent = "돼지고기";
         }
         if (meatType && meatType !== "전체" && meatTypeFromContent !== meatType)
           return null;
@@ -585,12 +601,14 @@ export const generateRecipeForPart = async (
 };
 
 /** 냉장고에서 랜덤 1부위 골라 레시피 생성 (로그인 필요) */
-export const generateRandomRecipeFromFridge = async (): Promise<string> => {
+export const generateRandomRecipeFromFridge = async (
+  meatType?: "beef" | "pork",
+): Promise<string> => {
   const response = await apiCall<LLMRecipeResponse>(
     "/api/v1/ai/recipe-random",
     {
       method: "POST",
-      body: {},
+      body: meatType ? { meat_type: meatType } : {},
     },
   );
   return response.recipe;

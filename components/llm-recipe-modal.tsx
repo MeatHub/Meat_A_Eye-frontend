@@ -18,6 +18,7 @@ import {
   getFridgeItems,
   generateRandomRecipeAny,
   generateRandomRecipeFromFridge,
+  generateRecipeForPart,
   saveRecipe,
   deleteSavedRecipe,
 } from "@/lib/api";
@@ -68,6 +69,8 @@ interface LLMRecipeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   source?: "ai_random" | "fridge_random" | "fridge_multi" | "part_specific";
+  partName?: string; // source="part_specific" 시 부위 영문명 (예: "Beef_Ribeye")
+  meatCategory?: "beef" | "pork"; // 냉장고 레시피 시 육류 필터
   initialContent?: string; // 저장된 레시피를 표시할 때 사용
   initialTitle?: string; // 저장된 레시피 제목
   initialIconUrl?: string; // 카드에서 사용 중인 아이콘 URL
@@ -199,6 +202,8 @@ export function LLMRecipeModal({
   open,
   onOpenChange,
   source = "fridge_multi",
+  partName,
+  meatCategory,
   initialContent,
   initialTitle,
   initialIconUrl,
@@ -233,11 +238,15 @@ export function LLMRecipeModal({
       fridgeItems.forEach((item) => {
         if (item.name) meats.push(item.name);
       });
-    } else if (source === "ai_random") {
+    } else if (source === "ai_random" || source === "part_specific") {
       // 마크다운에서 고기 부위 추출 시도
-      const meatMatch = markdown.match(/주재료:\s*([가-힣\s]+)/);
-      if (meatMatch) {
-        meats.push(meatMatch[1].trim());
+      if (partName) {
+        meats.push(getPartDisplayName(partName));
+      } else {
+        const meatMatch = markdown.match(/주재료:\s*([가-힣\s]+)/);
+        if (meatMatch) {
+          meats.push(meatMatch[1].trim());
+        }
       }
     }
     return meats;
@@ -255,7 +264,10 @@ export function LLMRecipeModal({
       let recipe: string;
       let storedItems: FridgeItemResponse[] = [];
 
-      if (source === "ai_random") {
+      if (source === "part_specific" && partName) {
+        // 분석된 부위로 레시피 생성
+        recipe = await generateRecipeForPart(partName);
+      } else if (source === "ai_random") {
         // 아무 고기로 랜덤 레시피 생성
         recipe = await generateRandomRecipeAny();
       } else if (source === "fridge_random") {
@@ -264,14 +276,31 @@ export function LLMRecipeModal({
         storedItems = fridgeResponse.items.filter(
           (item) => item.status === "stored",
         );
-        if (storedItems.length === 0) {
-          setError("냉장고에 고기가 없습니다. 먼저 고기를 추가해주세요!");
+        // meatCategory 필터 적용 (프론트 표시용)
+        const filteredItems = meatCategory
+          ? storedItems.filter((item) => {
+              const name = (item.name || "").toLowerCase();
+              if (meatCategory === "beef")
+                return name.startsWith("beef") || name.includes("소");
+              if (meatCategory === "pork")
+                return name.startsWith("pork") || name.includes("돼지");
+              return true;
+            })
+          : storedItems;
+        if (filteredItems.length === 0) {
+          const label =
+            meatCategory === "beef"
+              ? "소고기"
+              : meatCategory === "pork"
+                ? "돼지고기"
+                : "고기";
+          setError(`냉장고에 ${label}가 없습니다. 먼저 고기를 추가해주세요!`);
           setLoading(false);
           return;
         }
-        // generateRandomRecipeFromFridge는 백엔드에서 냉장고를 조회하므로 빈 배열 전송
-        recipe = await generateRandomRecipeFromFridge();
-        setFridgeItems(storedItems);
+        // generateRandomRecipeFromFridge는 백엔드에서 냉장고를 조회하므로 meatCategory 전달
+        recipe = await generateRandomRecipeFromFridge(meatCategory);
+        setFridgeItems(filteredItems);
       } else {
         // fridge_multi: 냉장고 여러 고기로 생성
         const fridgeResponse = await getFridgeItems();
@@ -308,7 +337,7 @@ export function LLMRecipeModal({
     } finally {
       setLoading(false);
     }
-  }, [source]);
+  }, [source, partName, meatCategory]);
 
   useEffect(() => {
     if (open) {
@@ -351,10 +380,20 @@ export function LLMRecipeModal({
         <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
           <DialogTitle className="flex items-center gap-2 text-2xl text-primary">
             <Wand2 className="w-6 h-6" />
-            AI 마법사의 레시피 추천
+            {source === "part_specific" && partName
+              ? `${getPartDisplayName(partName)} 레시피 추천`
+              : meatCategory === "beef"
+                ? "소고기 레시피 추천"
+                : meatCategory === "pork"
+                  ? "돼지고기 레시피 추천"
+                  : "AI 마법사의 레시피 추천"}
           </DialogTitle>
           <DialogDescription>
-            냉장고에 있는 고기들로 만들 수 있는 특별한 레시피를 추천해드립니다
+            {source === "part_specific" && partName
+              ? `${getPartDisplayName(partName)} 부위로 만들 수 있는 레시피를 추천해드립니다`
+              : meatCategory
+                ? `냉장고에 있는 ${meatCategory === "beef" ? "소고기" : "돼지고기"}로 만들 수 있는 레시피를 추천해드립니다`
+                : "냉장고에 있는 고기들로 만들 수 있는 특별한 레시피를 추천해드립니다"}
           </DialogDescription>
         </DialogHeader>
 

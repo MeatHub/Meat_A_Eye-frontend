@@ -678,7 +678,42 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     const yMax = Math.ceil((dataMax + padding) / 500) * 500;
     return [yMin, yMax] as [number, number];
   })();
-  const CHART_COLORS = ["#800000", "#A52A2A", "#CD5C5C", "#DC143C"];
+  // 부위별 고유 색상 맵 (유사색 방지)
+  const PART_COLORS: Record<string, string> = {
+    // 소고기: 붉은 계열
+    Beef_Tenderloin: "#8B0000", // 다크레드
+    Beef_Ribeye: "#C41E3A", // 카디널
+    Beef_Round: "#E25822", // 오렌지레드
+    Beef_Brisket: "#B22222", // 파이어브릭
+    Beef_Rib: "#A0522D", // 시에나
+    Beef_Sirloin: "#D2691E", // 초콜릿
+    Beef_Chuck: "#CC5500", // 번트오렌지
+    Beef_Shank: "#800000", // 마룬
+    Beef_Shoulder: "#DC143C", // 크림슨
+    // 돼지고기: 확실히 구분되는 다른 계열
+    Pork_PicnicShoulder: "#2E86C1", // 파랑 (앞다리)
+    Pork_Belly: "#E74C3C", // 빨강 (삼겹살)
+    Pork_Ribs: "#27AE60", // 초록 (갈비)
+    Pork_Neck: "#8E44AD", // 보라 (목심)
+    Pork_Tenderloin: "#F39C12", // 주황
+    Pork_Loin: "#1ABC9C", // 청록
+    Pork_Ham: "#D35400", // 호박
+    // 수입
+    Import_Beef_Rib_AU: "#6C3483",
+    Import_Beef_Ribeye_AU: "#2874A6",
+    Import_Pork_Belly: "#CB4335",
+  };
+  const CHART_COLORS_FALLBACK = [
+    "#800000",
+    "#2E86C1",
+    "#E74C3C",
+    "#27AE60",
+    "#8E44AD",
+    "#F39C12",
+  ];
+  const getChartColor = (partName: string, idx: number) =>
+    PART_COLORS[partName] ||
+    CHART_COLORS_FALLBACK[idx % CHART_COLORS_FALLBACK.length];
 
   if (loading) {
     return (
@@ -1268,10 +1303,10 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                               type="monotone"
                               dataKey={partName}
                               name={partName}
-                              stroke={CHART_COLORS[idx % CHART_COLORS.length]}
+                              stroke={getChartColor(partName, idx)}
                               strokeWidth={3}
                               dot={{
-                                fill: CHART_COLORS[idx % CHART_COLORS.length],
+                                fill: getChartColor(partName, idx),
                                 r: 4,
                               }}
                               activeDot={{ r: 6 }}

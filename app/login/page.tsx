@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Beef, Mail, Lock, Loader2 } from "lucide-react";
+import { Beef, Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { login: setAuth } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const {
     register,
@@ -44,6 +46,7 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
+    setLoginError(null);
     try {
       const response = await login(data);
       setIsGuest(false);
@@ -63,6 +66,7 @@ export default function LoginPage() {
       } else if (msg) {
         description = msg;
       }
+      setLoginError(description);
       toast({
         title: "로그인 실패",
         description,
@@ -117,11 +121,23 @@ export default function LoginPage() {
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="pl-10"
+                    className="pl-10 pr-10"
                     {...register("password")}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
                 {errors.password && (
                   <p className="text-sm text-destructive">
@@ -129,6 +145,14 @@ export default function LoginPage() {
                   </p>
                 )}
               </div>
+
+              {/* 로그인 실패 시 인라인 에러 메시지 */}
+              {loginError && (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive flex items-start gap-2">
+                  <Lock className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+              )}
 
               <Button
                 type="submit"

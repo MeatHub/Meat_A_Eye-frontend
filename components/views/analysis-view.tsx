@@ -27,14 +27,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import ReactMarkdown from "react-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -46,7 +38,6 @@ import {
   addFridgeItemFromTraceability,
   getAuthToken,
   getIsGuest,
-  generateRecipeForPart,
 } from "@/lib/api";
 import { getMeatInfoByPartName } from "@/lib/api-meat";
 import {
@@ -57,6 +48,7 @@ import {
 } from "@/lib/imagePreprocessing";
 import { toast } from "@/components/ui/use-toast";
 import { BackButton } from "@/components/shared/BackButton";
+import { LLMRecipeModal } from "@/components/llm-recipe-modal";
 import type { MeatAnalysisResult } from "@/constants/mockData";
 import type {
   AIAnalyzeResponse,
@@ -1144,21 +1136,8 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       });
       return;
     }
-    setLoadingRecipeForPart(true);
-    setRecipeForPartContent("");
-    try {
-      const recipe = await generateRecipeForPart(analysisResponse.partName);
-      setRecipeForPartContent(recipe);
-      setShowRecipeForPartModal(true);
-    } catch (err: any) {
-      toast({
-        title: "레시피 생성 실패",
-        description: err.message || "다시 시도해주세요.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingRecipeForPart(false);
-    }
+    // LLMRecipeModal이 자체적으로 레시피를 생성하므로 모달만 열기
+    setShowRecipeForPartModal(true);
   };
 
   const reset = () => {
@@ -1946,21 +1925,11 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                       <div className="grid grid-cols-2 gap-2">
                         <Button
                           onClick={handleRecipeForPart}
-                          disabled={loadingRecipeForPart}
                           variant="outline"
                           className="h-11 border-primary/30 text-primary hover:bg-primary/10 font-semibold text-sm rounded-xl"
                         >
-                          {loadingRecipeForPart ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
-                              생성 중...
-                            </>
-                          ) : (
-                            <>
-                              <ChefHat className="w-4 h-4 mr-1.5" />
-                              레시피 추천
-                            </>
-                          )}
+                          <ChefHat className="w-4 h-4 mr-1.5" />
+                          레시피 추천
                         </Button>
                         {!getIsGuest() && getAuthToken() ? (
                           <Button
@@ -2277,37 +2246,13 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
           </div>
         )}
 
-      {/* 이 부위 레시피 추천 모달 */}
-      <Dialog
+      {/* 이 부위 레시피 추천 모달 — LLMRecipeModal 재사용 */}
+      <LLMRecipeModal
         open={showRecipeForPartModal}
         onOpenChange={setShowRecipeForPartModal}
-      >
-        <DialogContent className="max-w-4xl bg-card max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
-            <DialogTitle className="flex items-center gap-2 text-xl text-primary">
-              <ChefHat className="w-5 h-5" />
-              {getPartDisplayName(
-                result?.partName ?? undefined,
-                meatInfo?.displayName,
-              )}{" "}
-              레시피 추천
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 min-h-0 overflow-hidden px-6">
-            <ScrollArea className="h-full">
-              {recipeForPartContent ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none py-4">
-                  <ReactMarkdown>{recipeForPartContent}</ReactMarkdown>
-                </div>
-              ) : (
-                <p className="text-muted-foreground py-4">
-                  레시피를 불러오는 중...
-                </p>
-              )}
-            </ScrollArea>
-          </div>
-        </DialogContent>
-      </Dialog>
+        source="part_specific"
+        partName={analysisResponse?.partName}
+      />
     </div>
   );
 }
