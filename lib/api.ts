@@ -175,8 +175,10 @@ export async function apiCall<T>(
       throw new Error(`${errorMessage} (URL: ${url})`);
     }
 
-    // Handle token expiration (401) - 일부 엔드포인트는 게스트 접근 허용
-    if (response.status === 401) {
+    // Handle token expiration (401) - 인증 관련 엔드포인트는 제외
+    const isAuthEndpoint =
+      endpoint.includes("/auth/login") || endpoint.includes("/auth/signup");
+    if (response.status === 401 && !isAuthEndpoint) {
       console.error(
         `[API ERROR] ${endpoint} - status: 401, message: 인증 토큰이 없거나 만료되었습니다.`,
       );

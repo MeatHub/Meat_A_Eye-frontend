@@ -1216,6 +1216,7 @@ export function FridgeView() {
                               <Input
                                 type="date"
                                 value={editForm.desiredConsumptionDate}
+                                min={new Date().toISOString().split("T")[0]}
                                 onChange={(e) =>
                                   setEditForm({
                                     ...editForm,
