@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -16,10 +16,28 @@ import { toast } from "@/components/ui/use-toast";
 import { getAuthToken, getIsGuest, getGuestNickname } from "@/lib/api";
 
 export default function MeatAEyeDashboard() {
-  const [activeMenu, setActiveMenu] = useState("dashboard");
+  const [activeMenu, setActiveMenuState] = useState(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("menu") || "dashboard";
+    }
+    return "dashboard";
+  });
   const [guestNickname, setGuestNickname] = useState<string | null>(null);
   const [showEntryGate, setShowEntryGate] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  // activeMenu 변경 시 URL 쿼리 파라미터도 함께 업데이트
+  const setActiveMenu = useCallback((menu: string) => {
+    setActiveMenuState(menu);
+    const url = new URL(window.location.href);
+    if (menu === "dashboard") {
+      url.searchParams.delete("menu");
+    } else {
+      url.searchParams.set("menu", menu);
+    }
+    window.history.replaceState({}, "", url.toString());
+  }, []);
 
   useEffect(() => {
     setMounted(true);

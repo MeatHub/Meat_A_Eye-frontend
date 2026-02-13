@@ -130,3 +130,12 @@ storybook-static/
 .sentryclirc
 
 icon_data/
+
+# 아이콘 원본 및 중간 산출물 무시
+icon_data/
+scripts/__pycache__/
+# 파이썬 캐시
+*.pyc
+__pycache__/
+# SQL 디렉토리 무시
+sql/

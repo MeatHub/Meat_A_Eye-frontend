@@ -455,6 +455,19 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
     };
   }, []);
 
+  // 카메라 스트림이 준비되고 video 요소가 렌더링된 후 연결
+  useEffect(() => {
+    if (inputMethod === "camera" && videoRef.current && streamRef.current) {
+      const video = videoRef.current;
+      if (!video.srcObject) {
+        video.srcObject = streamRef.current;
+        video
+          .play()
+          .catch((err: any) => console.warn("Video autoplay failed:", err));
+      }
+    }
+  }, [inputMethod]);
+
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -560,49 +573,9 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
         }
       }
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-
-        // 비디오가 로드될 때까지 대기
-        await new Promise<void>((resolve, reject) => {
-          if (!videoRef.current) {
-            reject(new Error("Video element not found"));
-            return;
-          }
-
-          const video = videoRef.current;
-          const timeout = setTimeout(() => {
-            reject(new Error("Video load timeout"));
-          }, 5000);
-
-          const onLoadedMetadata = () => {
-            clearTimeout(timeout);
-            video.removeEventListener("loadedmetadata", onLoadedMetadata);
-            video.removeEventListener("error", onError);
-            resolve();
-          };
-
-          const onError = (e: Event) => {
-            clearTimeout(timeout);
-            video.removeEventListener("loadedmetadata", onLoadedMetadata);
-            video.removeEventListener("error", onError);
-            reject(new Error("Video element error"));
-          };
-
-          video.addEventListener("loadedmetadata", onLoadedMetadata);
-          video.addEventListener("error", onError);
-
-          // 이미 로드된 경우
-          if (video.readyState >= 2) {
-            clearTimeout(timeout);
-            video.removeEventListener("loadedmetadata", onLoadedMetadata);
-            video.removeEventListener("error", onError);
-            resolve();
-          }
-        });
-      }
-
+      // 스트림을 먼저 저장하고, inputMethod를 camera로 전환하여
+      // video 요소가 렌더링된 후 useEffect에서 스트림을 연결
+      streamRef.current = stream;
       setInputMethod("camera");
       setError(null);
     } catch (err: any) {
@@ -650,6 +623,16 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
 
   const capturePhoto = () => {
     if (videoRef.current) {
+      // 비디오가 아직 프레임을 받지 못한 경우 방지
+      if (
+        videoRef.current.videoWidth === 0 ||
+        videoRef.current.videoHeight === 0
+      ) {
+        setError(
+          "카메라가 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.",
+        );
+        return;
+      }
       try {
         const dataUrl = captureFromVideo(videoRef.current);
         setSelectedImage(dataUrl);
@@ -803,24 +786,69 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
       setResult(displayResult);
 
       // 분석 응답에 영양정보와 가격정보가 포함되어 있으면 사용
-      if (analysisResult.nutrition || analysisResult.price) {
+      const hasPrice =
+        analysisResult.price && analysisResult.price.currentPrice > 0;
+      const hasNutrition = !!analysisResult.nutrition;
+
+      if (hasPrice && hasNutrition) {
+        // 영양정보 + 가격정보 모두 있음
         setMeatInfo({
           partName: analysisResult.partName || "",
           calories: analysisResult.nutrition?.calories || null,
           protein: analysisResult.nutrition?.protein || null,
           fat: analysisResult.nutrition?.fat || null,
           carbohydrate: analysisResult.nutrition?.carbohydrate || null,
-          currentPrice: analysisResult.price?.currentPrice || 0,
-          priceUnit: analysisResult.price?.priceUnit || "100g",
-          priceTrend: analysisResult.price?.priceTrend || "flat",
-          priceDate: analysisResult.price?.priceDate || null,
-          priceSource: analysisResult.price?.priceSource || "fallback",
-          gradePrices: analysisResult.price?.gradePrices || [],
+          currentPrice: analysisResult.price!.currentPrice,
+          priceUnit: analysisResult.price!.priceUnit || "100g",
+          priceTrend: analysisResult.price!.priceTrend || "flat",
+          priceDate: analysisResult.price!.priceDate || null,
+          priceSource: analysisResult.price!.priceSource || "api",
+          gradePrices: analysisResult.price!.gradePrices || [],
           nutritionSource: analysisResult.nutrition?.source || "fallback",
           storageGuide: null,
         });
+      } else if (hasNutrition && !hasPrice && analysisResult.partName) {
+        // 영양정보는 있지만 가격정보가 없음 → 먼저 영양정보 설정 후, 별도로 가격 조회
+        setMeatInfo({
+          partName: analysisResult.partName || "",
+          calories: analysisResult.nutrition?.calories || null,
+          protein: analysisResult.nutrition?.protein || null,
+          fat: analysisResult.nutrition?.fat || null,
+          carbohydrate: analysisResult.nutrition?.carbohydrate || null,
+          currentPrice: 0,
+          priceUnit: "100g",
+          priceTrend: "flat",
+          priceDate: null,
+          priceSource: "unavailable",
+          gradePrices: [],
+          nutritionSource: analysisResult.nutrition?.source || "fallback",
+          storageGuide: null,
+        });
+        // 별도 가격 조회 시도 (meat info API 경유)
+        try {
+          const priceInfo = await getMeatInfoByPartName(
+            analysisResult.partName,
+          );
+          if (priceInfo.currentPrice > 0) {
+            setMeatInfo((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    currentPrice: priceInfo.currentPrice,
+                    priceUnit: priceInfo.priceUnit || "100g",
+                    priceTrend: priceInfo.priceTrend || "flat",
+                    priceDate: priceInfo.priceDate || null,
+                    priceSource: priceInfo.priceSource || "api",
+                    gradePrices: priceInfo.gradePrices || [],
+                  }
+                : prev,
+            );
+          }
+        } catch (priceErr) {
+          console.warn("[Price fallback] 별도 가격 조회 실패:", priceErr);
+        }
       } else if (analysisResult.partName) {
-        // 응답에 없으면 별도로 조회
+        // 영양정보도 가격정보도 없음 → 전체 별도 조회
         await loadMeatInfo(analysisResult.partName);
       }
     } catch (err: any) {
@@ -1389,50 +1417,52 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* 분석 완료 알림 - 모드별 출력 */}
-                {result && !analyzing && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3 }}
-                    className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border-2 border-primary/30 p-6 mb-6"
-                  >
-                    <div className="flex items-center justify-center gap-4">
-                      <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
-                        <Sparkles className="w-8 h-8 text-primary animate-pulse" />
-                      </div>
-                      <div className="text-center flex-1">
-                        <h3 className="text-xl font-bold text-primary mb-1">
-                          {mode === "ocr"
-                            ? "이력번호 인식이 완료되었습니다!"
-                            : "부위 분석이 완료되었습니다!"}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {mode === "ocr" ? (
-                            result.traceabilityNumber ? (
-                              <>
-                                인식된 번호:{" "}
-                                <span className="font-mono font-semibold">
-                                  {result.traceabilityNumber}
-                                </span>
-                              </>
+                {/* 분석 완료 알림 - 모드별 출력 (OCR 실패 시에는 표시하지 않음) */}
+                {result &&
+                  !analyzing &&
+                  !(mode === "ocr" && !result.traceabilityNumber) && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                      className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border-2 border-primary/30 p-6 mb-6"
+                    >
+                      <div className="flex items-center justify-center gap-4">
+                        <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
+                          <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+                        </div>
+                        <div className="text-center flex-1">
+                          <h3 className="text-xl font-bold text-primary mb-1">
+                            {mode === "ocr"
+                              ? "이력번호 인식이 완료되었습니다!"
+                              : "부위 분석이 완료되었습니다!"}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {mode === "ocr" ? (
+                              result.traceabilityNumber ? (
+                                <>
+                                  인식된 번호:{" "}
+                                  <span className="font-mono font-semibold">
+                                    {result.traceabilityNumber}
+                                  </span>
+                                </>
+                              ) : (
+                                "아래에서 이력번호를 직접 입력할 수 있습니다."
+                              )
                             ) : (
-                              "아래에서 이력번호를 직접 입력할 수 있습니다."
-                            )
-                          ) : (
-                            <>
-                              {getPartDisplayName(
-                                result.partName,
-                                meatInfo?.displayName,
-                              )}{" "}
-                              부위가 성공적으로 분석되었습니다.
-                            </>
-                          )}
-                        </p>
+                              <>
+                                {getPartDisplayName(
+                                  result.partName,
+                                  meatInfo?.displayName,
+                                )}{" "}
+                                부위가 성공적으로 분석되었습니다.
+                              </>
+                            )}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                )}
+                    </motion.div>
+                  )}
 
                 {/* OCR 인식 실패 시 안내 배너 */}
                 {result &&

@@ -195,6 +195,7 @@ export interface PriceItem {
   currentPrice: number;
   unit: string;
   priceDate: string | null;
+  gradePrices?: GradePrice[];
 }
 
 export interface DashboardPricesResponse {

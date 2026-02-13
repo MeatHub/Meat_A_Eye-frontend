@@ -1040,35 +1040,57 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                           <motion.div
                             key={p.partName}
                             whileHover={{ scale: 1.02, y: -2 }}
-                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 rounded-xl bg-background/80 hover:bg-background shadow-md hover:shadow-lg transition-all border border-red-200/30 gap-2 sm:gap-0"
+                            className="flex flex-col p-3 sm:p-4 rounded-xl bg-background/80 hover:bg-background shadow-md hover:shadow-lg transition-all border border-red-200/30 gap-2"
                           >
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm sm:text-base font-bold text-foreground block mb-1 break-words">
-                                {p.partName}
-                              </span>
-                              {p.priceDate && (
-                                <span className="text-xs sm:text-[10px] text-muted-foreground">
-                                  {new Date(p.priceDate).toLocaleDateString(
-                                    "ko-KR",
-                                    {
-                                      month: "short",
-                                      day: "numeric",
-                                    },
-                                  )}
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm sm:text-base font-bold text-foreground block mb-1 break-words">
+                                  {p.partName}
                                 </span>
-                              )}
+                                {p.priceDate && (
+                                  <span className="text-xs sm:text-[10px] text-muted-foreground">
+                                    {new Date(p.priceDate).toLocaleDateString(
+                                      "ko-KR",
+                                      {
+                                        month: "short",
+                                        day: "numeric",
+                                      },
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 sm:gap-3 sm:ml-4 flex-shrink-0">
+                                <span className="text-base sm:text-lg font-extrabold text-red-600 tracking-tight whitespace-nowrap">
+                                  {p.currentPrice.toLocaleString()}원
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs font-semibold border-red-300/50 text-red-700 bg-red-50/50 px-2 py-1 whitespace-nowrap"
+                                >
+                                  {p.unit}
+                                </Badge>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 sm:gap-3 sm:ml-4 flex-shrink-0">
-                              <span className="text-base sm:text-lg font-extrabold text-red-600 tracking-tight whitespace-nowrap">
-                                {p.currentPrice.toLocaleString()}원
-                              </span>
-                              <Badge
-                                variant="outline"
-                                className="text-xs font-semibold border-red-300/50 text-red-700 bg-red-50/50 px-2 py-1 whitespace-nowrap"
-                              >
-                                {p.unit}
-                              </Badge>
-                            </div>
+                            {/* 등급별 가격 표시 (전체 선택 시) */}
+                            {p.gradePrices && p.gradePrices.length > 1 && (
+                              <div className="mt-1 pt-2 border-t border-red-100/50">
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  {p.gradePrices.map((gp) => (
+                                    <div
+                                      key={gp.grade}
+                                      className="flex flex-col items-center p-1.5 rounded-lg bg-red-50/50 border border-red-100/40"
+                                    >
+                                      <span className="text-[10px] text-muted-foreground font-medium">
+                                        {gp.grade}
+                                      </span>
+                                      <span className="text-xs font-bold text-red-600">
+                                        {gp.price.toLocaleString()}원
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </motion.div>
                         ))}
                       </div>

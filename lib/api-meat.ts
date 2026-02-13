@@ -8,9 +8,9 @@ import type { MeatInfoByPartNameResponse } from "@/src/types/api";
  */
 export const getMeatInfoByPartName = async (
   partName: string,
-  region: string = "seoul"
+  region: string = "전국",
 ): Promise<MeatInfoByPartNameResponse> => {
   return await apiCall<MeatInfoByPartNameResponse>(
-    `/api/v1/meat/info/part/${encodeURIComponent(partName)}?region=${region}`
+    `/api/v1/meat/info/part/${encodeURIComponent(partName)}?region=${encodeURIComponent(region)}`,
   );
 };

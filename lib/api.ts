@@ -30,9 +30,13 @@ import type {
 const getBackendUrl = (): string => {
   // 환경 변수가 설정되어 있으면 우선 사용
   if (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL) {
-    return process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+    return (
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      "http://localhost:8000"
+    );
   }
-  
+
   // 브라우저 환경에서만 동적 감지
   if (typeof window !== "undefined") {
     const hostname = window.location.hostname;
@@ -41,7 +45,7 @@ const getBackendUrl = (): string => {
       return `http://${hostname}:8000`;
     }
   }
-  
+
   return "http://localhost:8000";
 };
 
@@ -52,7 +56,12 @@ const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true"; // Defau
 
 // 백엔드 URL 로깅 (개발 환경)
 if (typeof window !== "undefined") {
-  console.log("🔧 [BACKEND URL]:", BACKEND_URL, "| Current hostname:", window.location.hostname);
+  console.log(
+    "🔧 [BACKEND URL]:",
+    BACKEND_URL,
+    "| Current hostname:",
+    window.location.hostname,
+  );
 }
 
 // JWT Token management
@@ -110,7 +119,7 @@ interface ApiCallOptions {
 
 export async function apiCall<T>(
   endpoint: string,
-  options: ApiCallOptions = {}
+  options: ApiCallOptions = {},
 ): Promise<T> {
   const {
     isAiServer = false,
@@ -147,24 +156,29 @@ export async function apiCall<T>(
     } catch (fetchError: any) {
       // 네트워크 에러 (연결 실패, CORS, 타임아웃 등)
       console.error(`❌ [NETWORK ERROR]: ${url}`, fetchError);
-      const errorMessage = fetchError.message || "네트워크 연결에 실패했습니다.";
-      
+      const errorMessage =
+        fetchError.message || "네트워크 연결에 실패했습니다.";
+
       // 모바일에서 localhost 접근 시도 감지
-      if (url.includes("localhost") && typeof window !== "undefined" && window.location.hostname !== "localhost") {
+      if (
+        url.includes("localhost") &&
+        typeof window !== "undefined" &&
+        window.location.hostname !== "localhost"
+      ) {
         throw new Error(
           `백엔드 서버에 연결할 수 없습니다. ` +
-          `모바일에서 접속 시 백엔드 서버가 같은 네트워크에 있어야 하며, ` +
-          `백엔드가 ${window.location.hostname}:8000에서 실행 중인지 확인해주세요.`
+            `모바일에서 접속 시 백엔드 서버가 같은 네트워크에 있어야 하며, ` +
+            `백엔드가 ${window.location.hostname}:8000에서 실행 중인지 확인해주세요.`,
         );
       }
-      
+
       throw new Error(`${errorMessage} (URL: ${url})`);
     }
 
     // Handle token expiration (401) - 일부 엔드포인트는 게스트 접근 허용
     if (response.status === 401) {
       console.error(
-        `[API ERROR] ${endpoint} - status: 401, message: 인증 토큰이 없거나 만료되었습니다.`
+        `[API ERROR] ${endpoint} - status: 401, message: 인증 토큰이 없거나 만료되었습니다.`,
       );
       // 냉장고 목록 같은 경우는 게스트도 접근 가능하므로 빈 데이터 반환
       if (endpoint.includes("/fridge/list")) {
@@ -175,7 +189,7 @@ export async function apiCall<T>(
       if (typeof window !== "undefined") {
         // 로그인 페이지로 리다이렉트하지 않고, 에러만 던짐 (게스트 모드 지원)
         console.warn(
-          "인증 토큰이 없거나 만료되었습니다. 게스트 모드로 계속 진행합니다."
+          "인증 토큰이 없거나 만료되었습니다. 게스트 모드로 계속 진행합니다.",
         );
       }
       throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
@@ -189,7 +203,7 @@ export async function apiCall<T>(
         errorData.detail ||
         `API Error: ${response.status} ${response.statusText}`;
       console.error(
-        `❌ [API RESPONSE ERROR]: status: ${response.status}, message: ${errorMessage}`
+        `❌ [API RESPONSE ERROR]: status: ${response.status}, message: ${errorMessage}`,
       );
       throw new Error(errorMessage);
     }
@@ -201,7 +215,7 @@ export async function apiCall<T>(
     console.error(
       `❌ [API RESPONSE ERROR]: status: ${
         error.status || "NETWORK_ERROR"
-      }, message: ${error.message || error}`
+      }, message: ${error.message || error}`,
     );
     throw error;
   }
@@ -211,7 +225,7 @@ export async function apiCall<T>(
 async function apiCallWithMock<T>(
   endpoint: string,
   mockData: T,
-  options: ApiCallOptions = {}
+  options: ApiCallOptions = {},
 ): Promise<T> {
   if (USE_MOCK_DATA) {
     console.log(`[Mock Mode] Returning mock data for: ${endpoint}`);
@@ -232,7 +246,7 @@ async function apiCallWithMock<T>(
 
 // Auth APIs
 export const signup = async (
-  data: RegisterRequest
+  data: RegisterRequest,
 ): Promise<RegisterResponse> => {
   const result = await apiCall<RegisterResponse>("/api/v1/auth/signup", {
     method: "POST",
@@ -256,6 +270,33 @@ export const logout = (): void => {
   removeAuthToken();
 };
 
+/** AUTH-05 비밀번호 재설정 (임시 비밀번호 이메일 발송) */
+export const requestPasswordReset = async (
+  email: string,
+): Promise<{ success: boolean; message: string }> => {
+  return await apiCall<{ success: boolean; message: string }>(
+    "/api/v1/auth/password-reset",
+    {
+      method: "POST",
+      body: { email },
+    },
+  );
+};
+
+/** AUTH-06 비밀번호 변경 (로그인 후) */
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ success: boolean; message: string }> => {
+  return await apiCall<{ success: boolean; message: string }>(
+    "/api/v1/auth/password-change",
+    {
+      method: "POST",
+      body: { current_password: currentPassword, new_password: newPassword },
+    },
+  );
+};
+
 // AI 분석 모드: 소 버전(beef) | 돼지 버전(pork) | OCR 버전(ocr)
 export type AIAnalysisMode = "beef" | "pork" | "ocr";
 
@@ -263,7 +304,7 @@ export type AIAnalysisMode = "beef" | "pork" | "ocr";
 export const analyzeImage = async (
   imageFile: File,
   mode: AIAnalysisMode = "beef",
-  autoAddFridge: boolean = false
+  autoAddFridge: boolean = false,
 ): Promise<AIAnalyzeResponse> => {
   const formData = new FormData();
   formData.append("image", imageFile);
@@ -297,39 +338,39 @@ export const getFridgeItems = async (): Promise<FridgeListResponse> => {
 };
 
 export const addFridgeItem = async (
-  item: FridgeItemAdd
+  item: FridgeItemAdd,
 ): Promise<{ id: number; status: string; alertScheduled: boolean }> => {
   return await apiCall<{ id: number; status: string; alertScheduled: boolean }>(
     "/api/v1/fridge/item",
     {
       method: "POST",
       body: item,
-    }
+    },
   );
 };
 
 export const addFridgeItemFromTraceability = async (
-  item: FridgeItemFromTraceabilityAdd
+  item: FridgeItemFromTraceabilityAdd,
 ): Promise<{ id: number; status: string; alertScheduled: boolean }> => {
   return await apiCall<{ id: number; status: string; alertScheduled: boolean }>(
     "/api/v1/fridge/item-from-traceability",
     {
       method: "POST",
       body: item,
-    }
+    },
   );
 };
 
 export const updateFridgeItemStatus = async (
   itemId: number,
-  status: "stored" | "consumed"
+  status: "stored" | "consumed",
 ): Promise<{ success: boolean; status: string }> => {
   return await apiCall<{ success: boolean; status: string }>(
     `/api/v1/fridge/${itemId}/status`,
     {
       method: "PATCH",
       body: { status } as FridgeStatusUpdate,
-    }
+    },
   );
 };
 
@@ -345,7 +386,7 @@ export const updateFridgeItem = async (
     meatInfoId?: number;
     customName?: string | null;
     desiredConsumptionDate?: string | null;
-  }
+  },
 ): Promise<{
   success: boolean;
   id: number;
@@ -369,7 +410,7 @@ export const updateFridgeItem = async (
 
 // 고기 부위 목록 조회
 export const getMeatInfoList = async (
-  category?: string
+  category?: string,
 ): Promise<
   Array<{
     id: number;
@@ -403,7 +444,7 @@ export const getMeatInfoList = async (
 // 영양정보 조회 (부위명과 등급 기반)
 export const getNutritionInfo = async (
   partName: string,
-  grade?: string | null
+  grade?: string | null,
 ): Promise<{
   by_grade: Array<{
     grade: string;
@@ -444,8 +485,15 @@ export const getNutritionInfo = async (
 };
 
 // 레시피 난이도/시간 추정: content 또는 id 기반으로 다양화
-function inferRecipeMeta(content: string, id: number): { cookingTime: number; difficulty: "초급" | "중급" | "고급" } {
-  const difficulties: Array<"초급" | "중급" | "고급"> = ["초급", "중급", "고급"];
+function inferRecipeMeta(
+  content: string,
+  id: number,
+): { cookingTime: number; difficulty: "초급" | "중급" | "고급" } {
+  const difficulties: Array<"초급" | "중급" | "고급"> = [
+    "초급",
+    "중급",
+    "고급",
+  ];
   let cookingTime = 30;
   const timeMatch = content.match(/(\d+)\s*분|소요\s*시간\s*[:：]?\s*(\d+)/);
   if (timeMatch) {
@@ -461,39 +509,44 @@ function inferRecipeMeta(content: string, id: number): { cookingTime: number; di
 export const getRecipes = async (meatType?: string): Promise<Recipe[]> => {
   try {
     const response = await getSavedRecipes();
-    return response.recipes.map((r) => {
-      const titleMatch = r.content.match(/^#\s+(.+)$/m);
-      const title = titleMatch ? titleMatch[1] : r.title;
-      let meatTypeFromContent = "전체";
-      if (r.used_meats) {
-        try {
-          const meats = JSON.parse(r.used_meats);
-          if (Array.isArray(meats) && meats.length > 0) {
-            const firstMeat = meats[0];
-            if (typeof firstMeat === "string") {
-              if (firstMeat.includes("소") || firstMeat.includes("한우")) meatTypeFromContent = "소고기";
-              else if (firstMeat.includes("돼지")) meatTypeFromContent = "돼지고기";
+    return response.recipes
+      .map((r) => {
+        const titleMatch = r.content.match(/^#\s+(.+)$/m);
+        const title = titleMatch ? titleMatch[1] : r.title;
+        let meatTypeFromContent = "전체";
+        if (r.used_meats) {
+          try {
+            const meats = JSON.parse(r.used_meats);
+            if (Array.isArray(meats) && meats.length > 0) {
+              const firstMeat = meats[0];
+              if (typeof firstMeat === "string") {
+                if (firstMeat.includes("소") || firstMeat.includes("한우"))
+                  meatTypeFromContent = "소고기";
+                else if (firstMeat.includes("돼지"))
+                  meatTypeFromContent = "돼지고기";
+              }
             }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
         }
-      }
-      if (meatType && meatType !== "전체" && meatTypeFromContent !== meatType) return null;
-      const { cookingTime, difficulty } = inferRecipeMeta(r.content, r.id);
-      const recipe: Recipe = {
-        id: String(r.id),
-        name: title,
-        meatType: meatTypeFromContent,
-        cookingTime,
-        difficulty,
-        ingredients: [] as string[],
-        instructions: [] as string[],
-        isBookmarked: r.is_bookmarked ?? false,
-        isPopular: (r.id + r.title.length) % 3 === 0,
-      };
-      return recipe;
-    }).filter((r): r is Recipe => r !== null);
+        if (meatType && meatType !== "전체" && meatTypeFromContent !== meatType)
+          return null;
+        const { cookingTime, difficulty } = inferRecipeMeta(r.content, r.id);
+        const recipe: Recipe = {
+          id: String(r.id),
+          name: title,
+          meatType: meatTypeFromContent,
+          cookingTime,
+          difficulty,
+          ingredients: [] as string[],
+          instructions: [] as string[],
+          isBookmarked: r.is_bookmarked ?? false,
+          isPopular: (r.id + r.title.length) % 3 === 0,
+        };
+        return recipe;
+      })
+      .filter((r): r is Recipe => r !== null);
   } catch (error) {
     console.error("Failed to load saved recipes:", error);
     return [];
@@ -508,7 +561,7 @@ export const getRecipeById = async (id: string): Promise<Recipe | null> => {
 // LLM Recipe Generation (Backend + LLM)
 // 백엔드가 DB에서 직접 냉장고 아이템을 조회하므로 빈 배열 전송
 export const generateRecipeWithLLM = async (
-  fridgeItems: Array<{ partName: string; name: string }> = []
+  fridgeItems: Array<{ partName: string; name: string }> = [],
 ): Promise<string> => {
   const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe", {
     method: "POST",
@@ -518,37 +571,54 @@ export const generateRecipeWithLLM = async (
 };
 
 /** 분석한 부위 1개로 레시피 생성 (인증 불필요) */
-export const generateRecipeForPart = async (partName: string): Promise<string> => {
-  const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe-for-part", {
-    method: "POST",
-    body: { partName },
-  });
+export const generateRecipeForPart = async (
+  partName: string,
+): Promise<string> => {
+  const response = await apiCall<LLMRecipeResponse>(
+    "/api/v1/ai/recipe-for-part",
+    {
+      method: "POST",
+      body: { partName },
+    },
+  );
   return response.recipe;
 };
 
 /** 냉장고에서 랜덤 1부위 골라 레시피 생성 (로그인 필요) */
 export const generateRandomRecipeFromFridge = async (): Promise<string> => {
-  const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe-random", {
-    method: "POST",
-    body: {},
-  });
+  const response = await apiCall<LLMRecipeResponse>(
+    "/api/v1/ai/recipe-random",
+    {
+      method: "POST",
+      body: {},
+    },
+  );
   return response.recipe;
 };
 
 /** 아무 고기로 랜덤 레시피 생성 (로그인 필요) */
 export const generateRandomRecipeAny = async (): Promise<string> => {
-  const response = await apiCall<LLMRecipeResponse>("/api/v1/ai/recipe-random-any", {
-    method: "POST",
-    body: {},
-  });
+  const response = await apiCall<LLMRecipeResponse>(
+    "/api/v1/ai/recipe-random-any",
+    {
+      method: "POST",
+      body: {},
+    },
+  );
   return response.recipe;
 };
 
 // Saved Recipe APIs
-import type { SaveRecipeRequest, SavedRecipeResponse, RecipeListResponse } from "@/src/types/api";
+import type {
+  SaveRecipeRequest,
+  SavedRecipeResponse,
+  RecipeListResponse,
+} from "@/src/types/api";
 
 /** 레시피 저장 */
-export const saveRecipe = async (recipe: SaveRecipeRequest): Promise<SavedRecipeResponse> => {
+export const saveRecipe = async (
+  recipe: SaveRecipeRequest,
+): Promise<SavedRecipeResponse> => {
   return await apiCall<SavedRecipeResponse>("/api/v1/ai/recipe/save", {
     method: "POST",
     body: recipe,
@@ -563,31 +633,43 @@ export const getSavedRecipes = async (): Promise<RecipeListResponse> => {
 };
 
 /** 저장된 레시피 삭제 */
-export const deleteSavedRecipe = async (recipeId: number): Promise<{ success: boolean; message: string }> => {
-  return await apiCall<{ success: boolean; message: string }>(`/api/v1/ai/recipe/saved/${recipeId}`, {
-    method: "DELETE",
-  });
+export const deleteSavedRecipe = async (
+  recipeId: number,
+): Promise<{ success: boolean; message: string }> => {
+  return await apiCall<{ success: boolean; message: string }>(
+    `/api/v1/ai/recipe/saved/${recipeId}`,
+    {
+      method: "DELETE",
+    },
+  );
 };
 
 /** 즐겨찾기한 레시피 ID 목록 */
 export const getBookmarkedRecipeIds = async (): Promise<number[]> => {
-  const res = await apiCall<{ bookmarked_ids: number[] }>("/api/v1/ai/recipe/bookmarks", { method: "GET" });
+  const res = await apiCall<{ bookmarked_ids: number[] }>(
+    "/api/v1/ai/recipe/bookmarks",
+    { method: "GET" },
+  );
   return res.bookmarked_ids ?? [];
 };
 
 /** 레시피 즐겨찾기 추가 */
-export const addRecipeBookmark = async (recipeId: number): Promise<{ success: boolean; message: string }> => {
+export const addRecipeBookmark = async (
+  recipeId: number,
+): Promise<{ success: boolean; message: string }> => {
   return await apiCall<{ success: boolean; message: string }>(
     `/api/v1/ai/recipe/saved/${recipeId}/bookmark`,
-    { method: "POST" }
+    { method: "POST" },
   );
 };
 
 /** 레시피 즐겨찾기 해제 */
-export const removeRecipeBookmark = async (recipeId: number): Promise<{ success: boolean; message: string }> => {
+export const removeRecipeBookmark = async (
+  recipeId: number,
+): Promise<{ success: boolean; message: string }> => {
   return await apiCall<{ success: boolean; message: string }>(
     `/api/v1/ai/recipe/saved/${recipeId}/bookmark`,
-    { method: "DELETE" }
+    { method: "DELETE" },
   );
 };
 
@@ -603,7 +685,7 @@ export function isBundleNumber(number: string): boolean {
 // 이력번호/묶음번호로 이력제 조회 (단건 — 묶음이면 첫 건)
 export const getTraceabilityByNumber = async (
   number: string,
-  source?: "import" | "domestic"
+  source?: "import" | "domestic",
 ): Promise<TraceabilityInfo> => {
   const trimmed = (number || "").trim();
   if (!trimmed) {
@@ -618,14 +700,14 @@ export const getTraceabilityByNumber = async (
 
 // 수입육 묶음번호로 이력 목록 조회 (클릭 시 getTraceabilityByNumber(이력번호)로 상세)
 export const getTraceabilityBundleList = async (
-  number: string
+  number: string,
 ): Promise<TraceabilityInfo[]> => {
   const trimmed = (number || "").trim();
   if (!trimmed) {
     throw new Error("묶음번호를 입력해 주세요.");
   }
   return await apiCall<TraceabilityInfo[]>(
-    `/api/v1/meat/traceability/bundle?number=${encodeURIComponent(trimmed)}`
+    `/api/v1/meat/traceability/bundle?number=${encodeURIComponent(trimmed)}`,
   );
 };
 
@@ -652,7 +734,7 @@ export const getRandomMeatFact = async (): Promise<{
 
 // User/Guest APIs
 export const createGuestSession = async (
-  nickname: string
+  nickname: string,
 ): Promise<{ token: string; nickname: string; isGuest: boolean }> => {
   // localStorage에서 guest_id 가져오기 또는 생성 (UUID 형식)
   let guestId = localStorage.getItem("guest_id");
@@ -664,7 +746,7 @@ export const createGuestSession = async (
         const r = (Math.random() * 16) | 0;
         const v = c === "x" ? r : (r & 0x3) | 0x8;
         return v.toString(16);
-      }
+      },
     );
     guestId = uuid;
     localStorage.setItem("guest_id", guestId);
@@ -715,13 +797,13 @@ export const setGuestNickname = (nickname: string): void => {
 
 // Dashboard API
 export const getPopularCuts = async (
-  limit: number = 5
+  limit: number = 5,
 ): Promise<PopularCutsResponse> => {
   return apiCall<PopularCutsResponse>(
     `/api/dashboard/popular-cuts?limit=${limit}`,
     {
       method: "GET",
-    }
+    },
   );
 };
 
@@ -729,7 +811,7 @@ export const getDashboardPrices = async (
   region?: string,
   beefPart?: string,
   porkPart?: string,
-  gradeCode?: string
+  gradeCode?: string,
 ): Promise<DashboardPricesResponse> => {
   const params = new URLSearchParams();
   if (region) params.append("region", region);
@@ -751,7 +833,7 @@ export const getDashboardPriceHistory = async (
   beefPart?: string,
   porkPart?: string,
   gradeCode?: string,
-  weeks: number = 6
+  weeks: number = 6,
 ): Promise<PriceHistoryResponse> => {
   const params = new URLSearchParams();
   if (region) params.append("region", region);
@@ -771,6 +853,6 @@ export const getDashboardPriceHistoryCheck = async (): Promise<{
 }> => {
   return apiCall<{ connected: boolean; message: string }>(
     "/api/dashboard/prices/history/check",
-    { method: "GET" }
+    { method: "GET" },
   );
 };
