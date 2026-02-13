@@ -1,6 +1,6 @@
 "use client";
 
-import { Beef, Menu, LogOut, User } from "lucide-react";
+import { Beef, Menu, LogOut, User, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -39,7 +39,7 @@ export function AppHeader({
   onMenuChange,
   guestNickname = "게스트",
 }: AppHeaderProps) {
-  const { isAuthenticated, nickname, logout } = useAuth();
+  const { isAuthenticated, nickname, mustResetPassword, logout } = useAuth();
   const router = useRouter();
   const displayName = isAuthenticated ? nickname || "사용자" : guestNickname;
 
@@ -183,6 +183,17 @@ export function AppHeader({
                   <DropdownMenuItem onClick={() => router.push("/dashboard")}>
                     <User className="mr-2 h-4 w-4" />
                     대시보드
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => router.push("/change-password")}
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    비밀번호 변경
+                    {mustResetPassword && (
+                      <span className="ml-auto text-xs text-amber-600 font-medium">
+                        필수
+                      </span>
+                    )}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

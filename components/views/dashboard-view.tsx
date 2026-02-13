@@ -32,6 +32,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Sector,
   BarChart,
   Bar,
   XAxis,
@@ -646,6 +647,84 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
     "#B22222",
     "#8B0000",
   ];
+
+  // 부위별 분포 차트 호버 상태
+  const [activePieIndex, setActivePieIndex] = useState<number | undefined>(
+    undefined,
+  );
+
+  // 그래프 선 호버 상태
+  const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
+
+  // 파이 차트 호버 시 확대 렌더링 (조각만 확대, 텍스트는 Tooltip으로)
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } =
+      props;
+    return (
+      <g>
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius - 3}
+          outerRadius={outerRadius + 10}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+          style={{
+            filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.25))",
+            transition: "all 0.2s ease",
+          }}
+        />
+      </g>
+    );
+  };
+
+  // 파이 차트 커스텀 툴팁
+  const PieCustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      return (
+        <div
+          style={{
+            background: "#fff",
+            border: `2px solid ${data.payload.fill || "#800020"}`,
+            borderRadius: 12,
+            padding: "10px 16px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+            minWidth: 120,
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontWeight: 700,
+              fontSize: 14,
+              color: "#1a1a1a",
+            }}
+          >
+            {data.name}
+          </p>
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontSize: 13,
+              color: data.payload.fill || "#800020",
+              fontWeight: 600,
+            }}
+          >
+            {data.value}개 (
+            {(
+              (data.payload.percent ||
+                data.value /
+                  pieData.reduce((s: number, e: any) => s + e.value, 0)) * 100
+            ).toFixed(0)}
+            %)
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   // 주별 가격 변동 차트 데이터 (카테고리 가격 아래 그래프용)
   const priceChartData = (() => {
@@ -1285,6 +1364,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                         <LineChart
                           data={priceChartData}
                           margin={{ top: 12, right: 12, left: 12, bottom: 12 }}
+                          onMouseLeave={() => setActiveLineIndex(null)}
                         >
                           <CartesianGrid
                             strokeDasharray="3 3"
@@ -1322,6 +1402,11 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                           />
                           <Legend
                             wrapperStyle={{ fontSize: "12px", fontWeight: 500 }}
+                            onMouseEnter={(e: any) => {
+                              const idx = priceChartParts.indexOf(e.dataKey);
+                              if (idx !== -1) setActiveLineIndex(idx);
+                            }}
+                            onMouseLeave={() => setActiveLineIndex(null)}
                           />
                           {priceChartParts.map((partName, idx) => (
                             <Line
@@ -1330,12 +1415,68 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                               dataKey={partName}
                               name={partName}
                               stroke={getChartColor(partName, idx)}
-                              strokeWidth={3}
+                              strokeWidth={activeLineIndex === idx ? 3.5 : 2}
+                              strokeOpacity={
+                                activeLineIndex === null
+                                  ? 0.45
+                                  : activeLineIndex === idx
+                                    ? 1
+                                    : 0.15
+                              }
                               dot={{
                                 fill: getChartColor(partName, idx),
-                                r: 4,
+                                r: activeLineIndex === idx ? 5 : 3,
+                                fillOpacity:
+                                  activeLineIndex === null
+                                    ? 0.5
+                                    : activeLineIndex === idx
+                                      ? 1
+                                      : 0.15,
+                                strokeOpacity: 0,
                               }}
-                              activeDot={{ r: 6 }}
+                              activeDot={{
+                                r: 7,
+                                strokeWidth: 2,
+                                stroke: getChartColor(partName, idx),
+                                fill: "#fff",
+                                style: {
+                                  filter:
+                                    "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
+                                },
+                              }}
+                              style={{
+                                transition: "all 0.3s ease",
+                                cursor: "pointer",
+                                pointerEvents: "stroke",
+                                strokeLinejoin: "round" as const,
+                              }}
+                              strokeLinecap="round"
+                              onMouseEnter={() => setActiveLineIndex(idx)}
+                              onMouseLeave={() => setActiveLineIndex(null)}
+                              connectNulls
+                              // 넓은 hover 영역을 위해 투명 배경 stroke 추가
+                              legendType="line"
+                            />
+                          ))}
+                          {/* 투명한 넓은 stroke로 hover 영역 확대 */}
+                          {priceChartParts.map((partName, idx) => (
+                            <Line
+                              key={`hover-${partName}`}
+                              type="monotone"
+                              dataKey={partName}
+                              name={partName}
+                              stroke="transparent"
+                              strokeWidth={16}
+                              dot={false}
+                              activeDot={false}
+                              legendType="none"
+                              tooltipType="none"
+                              style={{
+                                pointerEvents: "stroke",
+                                cursor: "pointer",
+                              }}
+                              onMouseEnter={() => setActiveLineIndex(idx)}
+                              onMouseLeave={() => setActiveLineIndex(null)}
                               connectNulls
                             />
                           ))}
@@ -1389,6 +1530,10 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                       innerRadius={30}
                       fill="#8884d8"
                       dataKey="value"
+                      activeIndex={activePieIndex}
+                      activeShape={renderActiveShape}
+                      onMouseEnter={(_, index) => setActivePieIndex(index)}
+                      onMouseLeave={() => setActivePieIndex(undefined)}
                       label={({
                         cx,
                         cy,
@@ -1423,7 +1568,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                         />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip content={<PieCustomTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="space-y-2 pt-2 border-t border-border/50">
@@ -1497,11 +1642,11 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                   const color =
                     daysLeft <= 1 ? "red" : daysLeft <= 3 ? "yellow" : "green";
                   const colorClasses = {
-                    red: "border-red-500/70 bg-gradient-to-r from-red-50 to-red-100/50 shadow-red-200/50",
+                    red: "border-red-300/60 bg-gradient-to-r from-[#fdf6f0] to-[#faf0ea] shadow-sm",
                     yellow:
-                      "border-yellow-500/70 bg-gradient-to-r from-yellow-50 to-yellow-100/50 shadow-yellow-200/50",
+                      "border-amber-300/60 bg-gradient-to-r from-[#fdf8f0] to-[#faf5ea] shadow-sm",
                     green:
-                      "border-green-500/70 bg-gradient-to-r from-green-50 to-green-100/50 shadow-green-200/50",
+                      "border-stone-200 bg-gradient-to-r from-[#f8f6f1] to-[#f5f3ee] shadow-sm",
                   };
 
                   return (
@@ -1511,21 +1656,25 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.05 }}
                       whileHover={{ scale: 1.02, x: 4 }}
-                      className={`p-4 rounded-xl border-2 ${colorClasses[color]} transition-all shadow-md hover:shadow-lg cursor-pointer`}
+                      className={`p-4 rounded-xl border overflow-hidden ${colorClasses[color]} transition-all hover:shadow-md cursor-pointer relative`}
                       onClick={() => onNavigate("fridge")}
                     >
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-bold text-base text-foreground">
-                          {getPartDisplayName(item.name)}
-                        </h4>
+                      {/* 버건디 상단 띠 */}
+                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#800020] rounded-t-xl" />
+                      <div className="flex justify-between items-start mb-2 pt-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-base text-foreground">
+                            {getPartDisplayName(item.name)}
+                          </h4>
+                        </div>
                         <Badge
                           variant="outline"
                           className={`text-xs font-bold px-2 py-1 ${
                             color === "red"
-                              ? "border-red-500 text-red-700 bg-red-100/50"
+                              ? "border-red-400 text-red-700 bg-red-50"
                               : color === "yellow"
-                                ? "border-yellow-500 text-yellow-700 bg-yellow-100/50"
-                                : "border-green-500 text-green-700 bg-green-100/50"
+                                ? "border-amber-400 text-amber-700 bg-amber-50"
+                                : "border-emerald-400 text-emerald-700 bg-emerald-50"
                           }`}
                         >
                           D{daysLeft >= 0 ? "-" : "+"}

@@ -12,6 +12,8 @@ import {
   X,
   ChefHat,
   Loader2,
+  Beef,
+  Ham,
   Thermometer,
   Snowflake,
 } from "lucide-react";
@@ -655,30 +657,36 @@ export function FridgeView() {
                     추천
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuContent align="end" className="w-52 p-1.5">
                   <DropdownMenuItem
                     onClick={() => {
                       setFridgeRecipeMeatCategory(undefined);
                       setShowFridgeRecipeModal(true);
                     }}
+                    className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer"
                   >
-                    🍖 전체 (랜덤)
+                    <ChefHat className="w-4 h-4 text-[#800020]" />
+                    <span className="font-medium">전체 (랜덤)</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => {
                       setFridgeRecipeMeatCategory("beef");
                       setShowFridgeRecipeModal(true);
                     }}
+                    className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer"
                   >
-                    🥩 소고기로 추천
+                    <Beef className="w-4 h-4 text-red-700" />
+                    <span className="font-medium">소고기로 추천</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => {
                       setFridgeRecipeMeatCategory("pork");
                       setShowFridgeRecipeModal(true);
                     }}
+                    className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer"
                   >
-                    🍖 돼지고기로 추천
+                    <Ham className="w-4 h-4 text-pink-600" />
+                    <span className="font-medium">돼지고기로 추천</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -931,7 +939,7 @@ export function FridgeView() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <AnimatePresence>
             {fridgeItems
               .filter((item) => item.status === "stored")
@@ -942,16 +950,15 @@ export function FridgeView() {
                 const color = getDDayColor(daysLeft);
 
                 const borderColors = {
-                  red: "border-red-400/60",
-                  yellow: "border-amber-400/60",
-                  green: "border-emerald-400/60",
+                  red: "border-red-300/50",
+                  yellow: "border-amber-300/50",
+                  green: "border-stone-200",
                 };
 
                 const bgColors = {
-                  red: "bg-gradient-to-br from-red-50/80 to-red-100/40",
-                  yellow: "bg-gradient-to-br from-amber-50/80 to-amber-100/40",
-                  green:
-                    "bg-gradient-to-br from-emerald-50/80 to-emerald-100/40",
+                  red: "bg-gradient-to-br from-[#fdf6f0] to-[#faf0ea]",
+                  yellow: "bg-gradient-to-br from-[#fdf8f0] to-[#faf5ea]",
+                  green: "bg-gradient-to-br from-[#f8f6f1] to-[#f5f3ee]",
                 };
 
                 const badgeColors = {
@@ -959,12 +966,6 @@ export function FridgeView() {
                   yellow: "bg-amber-500 text-white shadow-amber-200 shadow-sm",
                   green:
                     "bg-emerald-500 text-white shadow-emerald-200 shadow-sm",
-                };
-
-                const accentBar = {
-                  red: "bg-red-500",
-                  yellow: "bg-amber-500",
-                  green: "bg-emerald-500",
                 };
 
                 return (
@@ -978,10 +979,17 @@ export function FridgeView() {
                     className="relative"
                   >
                     <Card
-                      className={`relative overflow-hidden border ${borderColors[color]} ${bgColors[color]} shadow-md hover:shadow-xl transition-all duration-300 h-full flex flex-col rounded-xl`}
+                      className={`relative overflow-hidden border-2 border-[#800020]/30 ${bgColors[color]} shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col rounded-xl`}
                     >
-                      {/* 상단 컬러 바 */}
-                      <div className={`h-1 w-full ${accentBar[color]}`} />
+                      {/* D-Day 뱃지 - 우측 상단 */}
+                      <div className="absolute top-3 right-3 z-10">
+                        <Badge
+                          className={`${badgeColors[color]} border-0 font-bold text-xs shrink-0 rounded-lg px-2.5 py-1`}
+                        >
+                          D{daysLeft >= 0 ? "-" : "+"}
+                          {Math.abs(daysLeft)}
+                        </Badge>
+                      </div>
                       <CardHeader className="pb-2 pt-3 px-4">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
@@ -1087,21 +1095,21 @@ export function FridgeView() {
                                   return (
                                     <div className="flex flex-col gap-0.5">
                                       {category && (
-                                        <span className="text-[10px] font-semibold text-primary/70 uppercase tracking-wider">
+                                        <span className="text-[11px] sm:text-xs font-semibold text-primary/70 uppercase tracking-wider">
                                           {category}
                                         </span>
                                       )}
                                       {item.customName ? (
                                         <>
-                                          <CardTitle className="text-base font-bold text-foreground leading-tight">
+                                          <CardTitle className="text-base sm:text-lg font-bold text-foreground leading-tight">
                                             {item.customName}
                                           </CardTitle>
-                                          <span className="text-[11px] text-muted-foreground">
+                                          <span className="text-xs text-muted-foreground">
                                             {partName}
                                           </span>
                                         </>
                                       ) : (
-                                        <CardTitle className="text-base font-bold text-foreground leading-tight">
+                                        <CardTitle className="text-base sm:text-lg font-bold text-foreground leading-tight">
                                           {partName}
                                         </CardTitle>
                                       )}
@@ -1130,12 +1138,6 @@ export function FridgeView() {
                               </>
                             )}
                           </div>
-                          <Badge
-                            className={`${badgeColors[color]} border-0 font-bold text-[10px] shrink-0 rounded-lg px-2 py-0.5`}
-                          >
-                            D{daysLeft >= 0 ? "-" : "+"}
-                            {Math.abs(daysLeft)}
-                          </Badge>
                         </div>
                       </CardHeader>
                       <CardContent className="flex-1 flex flex-col pt-0 px-4 pb-4">
@@ -1358,7 +1360,7 @@ export function FridgeView() {
                               <Button
                                 onClick={() => handleConsumeItem(item.id)}
                                 size="sm"
-                                className="flex-1 bg-primary/10 text-primary hover:bg-primary/20 h-8 text-xs font-semibold rounded-lg"
+                                className="flex-1 border-2 border-[#800020] text-[#800020] bg-[#800020]/5 hover:bg-[#800020]/15 h-8 text-xs font-semibold rounded-lg"
                               >
                                 소비 완료
                               </Button>

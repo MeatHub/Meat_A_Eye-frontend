@@ -20,6 +20,7 @@ export interface LoginResponse {
   token: string;
   nickname: string;
   isGuest: boolean;
+  mustResetPassword?: boolean;
 }
 
 export interface FridgeItemResponse {

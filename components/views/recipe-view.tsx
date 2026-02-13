@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Star,
   Trash2,
+  Ham,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 const categories = ["전체", "돼지고기", "소고기"];
 type ViewMode = "all" | "bookmarks";
 
@@ -70,6 +78,9 @@ export function RecipeView() {
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFridgeRandomModal, setShowFridgeRandomModal] = useState(false);
+  const [fridgeRecipeMeatCategory, setFridgeRecipeMeatCategory] = useState<
+    "beef" | "pork" | undefined
+  >(undefined);
   const [showSavedRecipeModal, setShowSavedRecipeModal] = useState(false);
   const [selectedRecipeContent, setSelectedRecipeContent] =
     useState<string>("");
@@ -260,15 +271,50 @@ export function RecipeView() {
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
               >
-                <Button
-                  onClick={() => setShowFridgeRandomModal(true)}
-                  variant="outline"
-                  className="gap-2 border-primary text-primary hover:bg-primary/10 font-semibold"
-                >
-                  <ChefHat className="w-4 h-4" />
-                  <span className="hidden sm:inline">냉장고 기반</span> 레시피
-                  추천
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="gap-2 border-primary text-primary hover:bg-primary/10 font-semibold"
+                    >
+                      <ChefHat className="w-4 h-4" />
+                      <span className="hidden sm:inline">냉장고 기반</span>{" "}
+                      레시피 추천
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52 p-1.5">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setFridgeRecipeMeatCategory(undefined);
+                        setShowFridgeRandomModal(true);
+                      }}
+                      className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer"
+                    >
+                      <ChefHat className="w-4 h-4 text-[#800020]" />
+                      <span className="font-medium">전체 (랜덤)</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setFridgeRecipeMeatCategory("beef");
+                        setShowFridgeRandomModal(true);
+                      }}
+                      className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer"
+                    >
+                      <Beef className="w-4 h-4 text-red-700" />
+                      <span className="font-medium">소고기로 추천</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setFridgeRecipeMeatCategory("pork");
+                        setShowFridgeRandomModal(true);
+                      }}
+                      className="gap-3 px-3 py-2.5 rounded-lg cursor-pointer"
+                    >
+                      <Ham className="w-4 h-4 text-pink-600" />
+                      <span className="font-medium">돼지고기로 추천</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </motion.div>
             </div>
           </div>
@@ -453,6 +499,7 @@ export function RecipeView() {
         open={showFridgeRandomModal}
         onOpenChange={setShowFridgeRandomModal}
         source="fridge_random"
+        meatCategory={fridgeRecipeMeatCategory}
         onRecipeSaved={loadAllRecipes}
       />
 
@@ -465,7 +512,9 @@ export function RecipeView() {
         }}
         initialContent={selectedRecipeContent}
         initialTitle={selectedRecipeTitle}
-        initialIconUrl={selectedRecipeId ? iconUrls[selectedRecipeId] : undefined}
+        initialIconUrl={
+          selectedRecipeId ? iconUrls[selectedRecipeId] : undefined
+        }
         savedRecipeId={
           selectedRecipeId ? parseInt(selectedRecipeId, 10) : undefined
         }

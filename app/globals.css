@@ -1,41 +1,41 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #FAF9F6;
-  --foreground: #2D2D2D;
-  --card: #FFFEF9;
-  --card-foreground: #2D2D2D;
-  --popover: #FFFEF9;
-  --popover-foreground: #2D2D2D;
+  --background: #faf9f6;
+  --foreground: #2d2d2d;
+  --card: #fffef9;
+  --card-foreground: #2d2d2d;
+  --popover: #fffef9;
+  --popover-foreground: #2d2d2d;
   --primary: #800000;
-  --primary-foreground: #FFFFFF;
-  --secondary: #F5F3EF;
-  --secondary-foreground: #2D2D2D;
-  --muted: #F0EDE8;
-  --muted-foreground: #6B6B6B;
-  --accent: #A52A2A;
-  --accent-foreground: #FFFFFF;
-  --destructive: #DC2626;
-  --destructive-foreground: #FFFFFF;
-  --border: #E8E4DD;
-  --input: #E8E4DD;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f3ef;
+  --secondary-foreground: #2d2d2d;
+  --muted: #f0ede8;
+  --muted-foreground: #6b6b6b;
+  --accent: #a52a2a;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e8e4dd;
+  --input: #e8e4dd;
   --ring: #800000;
   --chart-1: #800000;
-  --chart-2: #A52A2A;
-  --chart-3: #CD5C5C;
-  --chart-4: #F08080;
-  --chart-5: #FFB6C1;
+  --chart-2: #a52a2a;
+  --chart-3: #cd5c5c;
+  --chart-4: #f08080;
+  --chart-5: #ffb6c1;
   --radius: 0.75rem;
-  --sidebar: #FFFEF9;
-  --sidebar-foreground: #2D2D2D;
+  --sidebar: #fffef9;
+  --sidebar-foreground: #2d2d2d;
   --sidebar-primary: #800000;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F5F3EF;
-  --sidebar-accent-foreground: #2D2D2D;
-  --sidebar-border: #E8E4DD;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f5f3ef;
+  --sidebar-accent-foreground: #2d2d2d;
+  --sidebar-border: #e8e4dd;
   --sidebar-ring: #800000;
 }
 
@@ -75,8 +75,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: "Geist", "Geist Fallback";
+  --font-mono: "Geist Mono", "Geist Mono Fallback";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
