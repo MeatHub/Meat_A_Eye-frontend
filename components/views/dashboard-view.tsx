@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { TrendingUp, Beef, BookOpen, AlertCircle, Ham } from "lucide-react";
+import {
+  TrendingUp,
+  Beef,
+  BookOpen,
+  AlertCircle,
+  Ham,
+  Snowflake,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -1433,7 +1440,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-3 text-xl font-bold text-primary">
               <div className="p-2 rounded-xl bg-primary/10">
-                <AlertCircle className="w-5 h-5" />
+                <Snowflake className="w-5 h-5" />
               </div>
               냉장고 보관 현황
             </CardTitle>
@@ -1449,7 +1456,7 @@ export function DashboardView({ onNavigate }: DashboardViewProps) {
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <AlertCircle className="w-20 h-20 mx-auto mb-4 opacity-30" />
+                  <Snowflake className="w-20 h-20 mx-auto mb-4 opacity-30" />
                   <h3 className="text-lg font-bold mb-2 text-foreground">
                     보관 중인 고기가 없습니다
                   </h3>

@@ -929,7 +929,10 @@ export function FridgeView() {
             {fridgeItems
               .filter((item) => item.status === "stored")
               .map((item, index) => {
-                const daysLeft = item.dDay;
+                // 희망 섭취기간이 설정되어 있으면 그 날짜 기준, 아니면 유통기한 기준
+                const daysLeft = item.desiredConsumptionDate
+                  ? getDDay(item.desiredConsumptionDate)
+                  : item.dDay;
                 const color = getDDayColor(daysLeft);
 
                 const borderColors = {
@@ -1082,13 +1085,19 @@ export function FridgeView() {
                                           {category}
                                         </span>
                                       )}
-                                      <CardTitle className="text-base font-bold text-foreground leading-tight">
-                                        {partName}
-                                      </CardTitle>
-                                      {item.customName && (
-                                        <span className="text-xs text-muted-foreground font-medium truncate">
-                                          {item.customName}
-                                        </span>
+                                      {item.customName ? (
+                                        <>
+                                          <CardTitle className="text-base font-bold text-foreground leading-tight">
+                                            {item.customName}
+                                          </CardTitle>
+                                          <span className="text-[11px] text-muted-foreground">
+                                            {partName}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <CardTitle className="text-base font-bold text-foreground leading-tight">
+                                          {partName}
+                                        </CardTitle>
                                       )}
                                     </div>
                                   );

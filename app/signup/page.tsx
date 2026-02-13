@@ -37,6 +37,7 @@ export default function SignupPage() {
   const router = useRouter();
   const { login: setAuth } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [signupError, setSignupError] = useState<string | null>(null);
 
   const {
     register,
@@ -48,6 +49,7 @@ export default function SignupPage() {
 
   const onSubmit = async (data: SignupFormData) => {
     setIsLoading(true);
+    setSignupError(null);
     try {
       const response = await signup(data);
       setIsGuest(false);
@@ -65,6 +67,7 @@ export default function SignupPage() {
       } else if (msg) {
         description = msg;
       }
+      setSignupError(description);
       toast({
         title: "회원가입 실패",
         description,
@@ -150,6 +153,14 @@ export default function SignupPage() {
                   </p>
                 )}
               </div>
+
+              {signupError && (
+                <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2">
+                  <p className="text-sm text-destructive font-medium">
+                    {signupError}
+                  </p>
+                </div>
+              )}
 
               <Button
                 type="submit"
