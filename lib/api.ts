@@ -29,12 +29,14 @@ import type {
 // 동적 백엔드 URL 감지: 모바일에서 접속 시 현재 호스트의 IP 사용
 const getBackendUrl = (): string => {
   // 환경 변수가 설정되어 있으면 우선 사용
-  if (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL) {
-    return (
-      process.env.NEXT_PUBLIC_API_URL ||
-      process.env.NEXT_PUBLIC_BACKEND_URL ||
-      "http://localhost:8000"
-    );
+  // .env.example의 NEXT_PUBLIC_API_BASE_URL도 호환
+  const envUrl =
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (envUrl) {
+    return envUrl;
   }
 
   // 브라우저 환경에서만 동적 감지

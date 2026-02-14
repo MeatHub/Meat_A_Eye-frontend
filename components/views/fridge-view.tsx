@@ -66,6 +66,8 @@ import { toast } from "@/components/ui/use-toast";
 import { LLMRecipeModal } from "@/components/llm-recipe-modal";
 import { useRouter } from "next/navigation";
 import type { FridgeItemResponse } from "@/src/types/api";
+import { getMeatCardImage } from "@/src/lib/meat-image";
+import Image from "next/image";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -968,6 +970,13 @@ export function FridgeView() {
                     "bg-emerald-500 text-white shadow-emerald-200 shadow-sm",
                 };
 
+                // 부위 이미지 URL 계산
+                const meatInfo = meatInfoList.find(
+                  (m) => m.id === item.meatInfoId,
+                );
+                const meatPartName = meatInfo?.name ?? null;
+                const meatImageUrl = getMeatCardImage(meatPartName);
+
                 return (
                   <motion.div
                     key={item.id}
@@ -981,6 +990,20 @@ export function FridgeView() {
                     <Card
                       className={`relative overflow-hidden border-2 border-[#800020]/30 ${bgColors[color]} shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col rounded-xl`}
                     >
+                      {/* 부위 배경 이미지 */}
+                      {meatImageUrl && (
+                        <div className="absolute top-8 right-0 w-[55%] sm:w-[50%] aspect-[4/3] z-[1] pointer-events-none select-none">
+                          <Image
+                            src={meatImageUrl}
+                            alt=""
+                            fill
+                            sizes="(max-width: 640px) 55vw, 200px"
+                            className="object-contain drop-shadow-md"
+                            draggable={false}
+                            priority
+                          />
+                        </div>
+                      )}
                       {/* D-Day 뱃지 - 우측 상단 */}
                       <div className="absolute top-3 right-3 z-10">
                         <Badge
@@ -990,7 +1013,7 @@ export function FridgeView() {
                           {Math.abs(daysLeft)}
                         </Badge>
                       </div>
-                      <CardHeader className="pb-2 pt-3 px-4">
+                      <CardHeader className="pb-2 pt-3 px-4 relative z-[2]">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             {editingItemId === item.id ? (
@@ -1140,7 +1163,7 @@ export function FridgeView() {
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="flex-1 flex flex-col pt-0 px-4 pb-4">
+                      <CardContent className="flex-1 flex flex-col pt-0 px-4 pb-4 relative z-[2]">
                         {editingItemId === item.id ? (
                           <>
                             {/* 편집 모드 날짜 정보 */}

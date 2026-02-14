@@ -1182,7 +1182,7 @@ export function AnalysisView({ onSaveToFridge, onBack }: AnalysisViewProps) {
             부위 판별 모드
           </CardTitle>
           <CardDescription className="text-xs sm:text-sm mt-1">
-            분석할 고기 종류 또는 인식 방식을 선택하세요. (AI 가중치 학습 중)
+            분석할 고기 종류 또는 인식 방식을 선택하세요.
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
