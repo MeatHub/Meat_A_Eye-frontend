@@ -1,141 +1,70 @@
-# ============================================================
-# Meat-A-Eye Frontend - Next.js .gitignore
-# ============================================================
-# See https://help.github.com/articles/ignoring-files/
+# ==============================
+# MeatHub Frontend (Next.js) — .gitignore
+# ==============================
 
-# ==============================
-# 📦 Dependencies
-# ==============================
+# ── 의존성 ───────────────────────────────────────────────
 /node_modules
 /.pnp
 .pnp.js
 .yarn/install-state.gz
 
-# Testing
-/coverage
-
-# Next.js
+# ── Next.js 빌드 ────────────────────────────────────────
 /.next/
 /out/
-
-# Production
 /build
 /dist
 
-# Misc
-.DS_Store
-*.pem
-Thumbs.db
+# ── 테스트 ───────────────────────────────────────────────
+/coverage
 
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# ==============================
-# 🔐 Local env files (DO NOT commit these!)
-# ==============================
+# ── 환경변수 / 시크릿 ───────────────────────────────────
 .env
 .env*.local
 .env.development.local
 .env.test.local
 .env.production.local
 !.env.example
-
-# API Keys & Secrets
 secrets.json
 credentials.json
 
-# Vercel
-.vercel
-
-# TypeScript
+# ── TypeScript ───────────────────────────────────────────
 *.tsbuildinfo
 next-env.d.ts
 
-# Python Virtual Environments (백엔드 개발 시)
-venv/
-.venv/
-**/venv/
-**/.venv/
-env/
-ENV/
-*.pyc
-__pycache__/
+# ── 캐시 ─────────────────────────────────────────────────
+.cache/
+.eslintcache
+.stylelintcache
 
-# IDEs and Editors
+# ── IDE / 에디터 ─────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-.history/
 
-# OS Files
+# ── OS 파일 ──────────────────────────────────────────────
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# Lock files (선택적 - 팀 정책에 따라)
-# pnpm-lock.yaml
-# package-lock.json
-# yarn.lock
-
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.backup
-*~
-
-# Logs
-logs/
+# ── 로그 ─────────────────────────────────────────────────
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
 .pnpm-debug.log*
 
-# API Keys & Secrets (추가 보안)
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-secrets.json
-credentials.json
+# ── 임시 / 백업 ─────────────────────────────────────────
+*.tmp
+*.temp
+*.bak
+*.backup
 
-# Cache
-.cache/
-.parcel-cache/
-.eslintcache
-.stylelintcache
+# ── Vercel ───────────────────────────────────────────────
+.vercel
 
-# Storybook
+# ── 기타 ─────────────────────────────────────────────────
+*.pem
+icon_data/
 storybook-static/
-
-# Sentry
-.sentryclirc
-
-icon_data/
-
-# 아이콘 원본 및 중간 산출물 무시
-icon_data/
-scripts/__pycache__/
-# 파이썬 캐시
-*.pyc
-__pycache__/
-# SQL 디렉토리 무시
-sql/
